@@ -1,10 +1,59 @@
 "use server";
 import yahooFinance from 'yahoo-finance2';
 
-// Node 18+ (Vercel) has native globalThis.fetch — no polyfill needed.
-// We spoof a real browser User-Agent so Yahoo Finance doesn't block
-// Vercel's serverless IPs. Headers are passed inline as the third
-// "moduleOpts" argument on every yahoo-finance2 v3 call site.
+// ─── Shared browser-spoof headers ────────────────────────────────────────────
+const YF_HEADERS: Record<string, string> = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.5',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Connection': 'keep-alive',
+  'Upgrade-Insecure-Requests': '1',
+};
+
+/**
+ * Direct raw fetch to Yahoo Finance query2 API — bypasses yahoo-finance2
+ * library entirely.  Used as the primary fallback when the library's internal
+ * environment validation fails on Vercel's serverless runtime.
+ *
+ * Endpoint structure:
+ *   quoteSummary.result[0].incomeStatementHistory.incomeStatementHistory[]
+ *   quoteSummary.result[0].balanceSheetHistory.balanceSheetStatements[]
+ *   quoteSummary.result[0].cashflowStatementHistory.cashflowStatements[]
+ */
+async function rawYahooFetch(ticker: string, modules: string[]): Promise<any> {
+  const modParam = modules.join(',');
+  const url = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=${modParam}&corsDomain=finance.yahoo.com&formatted=true`;
+  console.log(`[RAW] Fetching ${url}`);
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: YF_HEADERS,
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(`[RAW] HTTP ${res.status} ${res.statusText} for ${ticker}`);
+  }
+  const json: any = await res.json();
+  const result = json?.quoteSummary?.result?.[0];
+  if (!result) {
+    const errMsg = json?.quoteSummary?.error?.description ?? 'No result in response';
+    throw new Error(`[RAW] Empty result for ${ticker}: ${errMsg}`);
+  }
+  return result;
+}
+
+/**
+ * Raw fetch to Yahoo v8 quote endpoint for a single price snapshot.
+ * Used as a last resort when all financial-data paths fail.
+ */
+async function rawYahooQuote(ticker: string): Promise<any> {
+  const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
+  console.log(`[RAW] Quote fetch ${url}`);
+  const res = await fetch(url, { method: 'GET', headers: YF_HEADERS, cache: 'no-store' });
+  if (!res.ok) throw new Error(`[RAW] Quote HTTP ${res.status} for ${ticker}`);
+  const json: any = await res.json();
+  return json?.chart?.result?.[0]?.meta ?? null;
+}
 
 export type StockQuote = {
   symbol: string;
@@ -85,69 +134,50 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     let quote: StockQuote | null = null;
     let fundamentals: YahooFundamentals | null = null;
 
+    // ── TIER 1: yahoo-finance2 library (full data, validates/coerces response) ──
     let yahooData: any = null;
+    let usedRawFallback = false;
     try {
       yahooData = await yahooFinance.quoteSummary(
         symbol,
         { modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend', 'price'] } as any,
-        // Inline fetchOptions — passed directly so the library cannot strip them
-        {
-          fetchOptions: {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.5',
-              'Accept-Encoding': 'gzip, deflate, br',
-            },
-          },
-        } as any
+        { fetchOptions: { headers: YF_HEADERS } } as any
       );
-    } catch (e: any) {
-      // Log full detail so we can distinguish 403 Forbidden vs fetch-not-defined
-      console.error(`[YF] quoteSummary failed for ${symbol}:`, e.message);
-      console.error(`[YF] stack:`, e.stack);
+      console.log(`[TIER1] Library succeeded for ${symbol}`);
+    } catch (libErr: any) {
+      console.error(`[TIER1] Library failed for ${symbol}: ${libErr.message}`);
+
+      // ── TIER 2: raw fetch to Yahoo query2 — bypasses the library ────────────
       try {
-        const basicQuote: any = await yahooFinance.quote(
-          symbol,
-          {},
-          {
-            fetchOptions: {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-              },
-            },
-          } as any
-        );
-        quote = {
-          symbol: basicQuote.symbol,
-          price: basicQuote.regularMarketPrice || 0,
-          changesPercentage: basicQuote.regularMarketChangePercent || 0
-        };
-        const chartRes: any = await yahooFinance.quoteSummary(
-          symbol,
-          { modules: ['earnings'] } as any,
-          {
-            fetchOptions: {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-              },
-            },
-          } as any
-        );
-        if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
-             const yearly = chartRes.earnings.financialsChart.yearly || [];
-             yahooData = { isFallback: true, earningsFallback: yearly };
-        } else {
-             yahooData = null; 
+        console.log(`[TIER2] Attempting raw fetch for ${symbol}...`);
+        const rawData = await rawYahooFetch(symbol, [
+          'summaryDetail', 'financialData', 'defaultKeyStatistics',
+          'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory',
+          'earningsTrend', 'price',
+        ]);
+        // Normalize: raw fetch with formatted=true wraps numbers as { raw, fmt }
+        // which is the same shape the library returns — existing mapping code works.
+        yahooData = rawData;
+        usedRawFallback = true;
+        console.log(`[TIER2] Raw fetch succeeded for ${symbol}`);
+      } catch (rawErr: any) {
+        console.error(`[TIER2] Raw fetch failed for ${symbol}: ${rawErr.message}`);
+
+        // ── TIER 3: price-only via Yahoo chart API ───────────────────────────
+        try {
+          console.log(`[TIER3] Attempting price-only fetch for ${symbol}...`);
+          const meta = await rawYahooQuote(symbol);
+          if (meta) {
+            quote = {
+              symbol: meta.symbol || symbol,
+              price: meta.regularMarketPrice || 0,
+              changesPercentage: meta.regularMarketChangePercent || 0,
+            };
+          }
+          console.log(`[TIER3] Price-only fetch ${quote ? 'succeeded' : 'returned empty'} for ${symbol}`);
+        } catch (quoteErr: any) {
+          console.error(`[TIER3] All fetch tiers failed for ${symbol}: ${quoteErr.message}`);
         }
-      } catch (e2: any) {
-        // Log full detail on the fallback too — tells us if it's 403 or env issue
-        console.error(`[YF] Fallback failed for ${symbol}:`, e2.message);
-        console.error(`[YF] Fallback stack:`, e2.stack);
       }
     }
 
@@ -155,8 +185,12 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       const priceInfo = yahooData.price || {};
       quote = {
         symbol: priceInfo.symbol || symbol,
-        price: priceInfo.regularMarketPrice || ext(yahooData.summaryDetail?.previousClose) || 0,
-        changesPercentage: (priceInfo.regularMarketChangePercent !== undefined) ? (priceInfo.regularMarketChangePercent * 100) : 0
+        price: ext(priceInfo.regularMarketPrice) || ext(yahooData.summaryDetail?.previousClose) || 0,
+        // library returns a fraction (0.02 = 2%), raw API may return the same; multiply only if < 1
+        changesPercentage: (() => {
+          const raw = ext(priceInfo.regularMarketChangePercent);
+          return Math.abs(raw) < 2 ? raw * 100 : raw; // fraction → percent
+        })(),
       };
 
       const summary: any = yahooData.summaryDetail || {};
