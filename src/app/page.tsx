@@ -257,13 +257,7 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
   const [enlargedChart, setEnlargedChart] = useState<string | null>(null);
 
   const data = useMemo(() => {
-    // Advanced extraction to handle edge cases of zero vs null vs formatting objects
-    const ext = (val: any) => {
-        if (val === null || val === undefined) return 0;
-        // Data Mapping: Always use the .raw value from the API response
-        return val.raw !== undefined ? val.raw : (Number(val) || 0);
-    };
-    
+
     const formatSmallDate = (d: any) => {
         if (!d) return "N/A";
         try {
@@ -282,7 +276,8 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
         if (!Array.isArray(arr)) return;
         arr.forEach(row => {
             // Priority: Explicit year from mapHistory, then fallback
-            const year = row.year || formatSmallDate(row.endDate || row.asOfDate);
+            let dateVal = row.endDate?.fmt || row.endDate || row.asOfDate?.fmt || row.asOfDate;
+            const year = row.year || formatSmallDate(dateVal);
             if (year === "N/A" || !year) return;
             
             if (!yearMap.has(year)) {
@@ -295,32 +290,33 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
             const entry = yearMap.get(year);
             
             if (type === 'income') {
-                entry.rev = ext(row.totalRevenue);
-                let gross = ext(row.grossProfit) || ext(row.totalGrossProfit);
+                entry.rev = (row.totalRevenue?.raw || row.totalRevenue || 0);
+                let gross = (row.grossProfit?.raw || row.grossProfit || row.totalGrossProfit?.raw || row.totalGrossProfit || 0);
                 // Manual Calculation: If grossProfit is missing or 0, calculate it manually as: revenue - costOfRevenue
                 if (!gross || gross === 0) {
-                    gross = entry.rev - ext(row.costOfRevenue);
+                    const cost = (row.costOfRevenue?.raw || row.costOfRevenue || 0);
+                    gross = entry.rev - cost;
                 }
                 entry.gross = gross;
-                entry.opInc = ext(row.operatingIncome) || ext(row.ebit);
-                entry.netInc = ext(row.netIncome) || ext(row.netIncomeCommonStockholders);
+                entry.opInc = (row.operatingIncome?.raw || row.operatingIncome || 0);
+                entry.netInc = (row.netIncome?.raw || row.netIncome || row.netIncomeCommonStockholders?.raw || row.netIncomeCommonStockholders || 0);
             } else if (type === 'balance') {
-                entry.assets = ext(row.totalAssets);
-                entry.liab = ext(row.totalLiab) || ext(row.totalLiabilitiesNetMinorityInterest) || ext(row.totalLiabilities);
-                entry.equity = ext(row.stockholdersEquity) || ext(row.totalStockholderEquity);
-                entry.retained = ext(row.retainedEarnings);
-                entry.cash = ext(row.cashAndCashEquivalents) || ext(row.cash) || ext(row.totalCash);
+                entry.assets = (row.totalAssets?.raw || row.totalAssets || 0);
+                entry.liab = (row.totalLiabilitiesNetMinorityInterest?.raw || row.totalLiabilitiesNetMinorityInterest || row.totalLiab?.raw || row.totalLiab || row.totalLiabilities?.raw || row.totalLiabilities || 0);
+                entry.equity = (row.totalStockholderEquity?.raw || row.totalStockholderEquity || row.stockholdersEquity?.raw || row.stockholdersEquity || 0);
+                entry.retained = (row.retainedEarnings?.raw || row.retainedEarnings || 0);
+                entry.cash = (row.totalCashAndShortTermInvestments?.raw || row.totalCashAndShortTermInvestments || row.cashAndCashEquivalents?.raw || row.cashAndCashEquivalents || row.cash?.raw || row.cash || row.totalCash?.raw || row.totalCash || 0);
                 
-                let parsedDebt = ext(row.totalDebt) || ext(row.longTermDebt);
+                let parsedDebt = (row.totalDebt?.raw || row.totalDebt || row.longTermDebt?.raw || row.longTermDebt || 0);
                 if (parsedDebt === 0) {
-                    parsedDebt = ext(row.shortLongTermDebt) + ext(row.longTermDebt);
+                    parsedDebt = (row.shortLongTermDebt?.raw || row.shortLongTermDebt || 0) + (row.longTermDebt?.raw || row.longTermDebt || 0);
                 }
                 entry.debt = parsedDebt;
             } else if (type === 'cash') {
-                entry.fcf = ext(row.freeCashflow || row.freeCashFlow);
-                entry.ocf = ext(row.operatingCashflow || row.totalCashFromOperatingActivities);
+                entry.fcf = (row.freeCashflow?.raw || row.freeCashflow || row.freeCashFlow?.raw || row.freeCashFlow || 0);
+                entry.ocf = (row.operatingCashflow?.raw || row.operatingCashflow || row.totalCashFromOperatingActivities?.raw || row.totalCashFromOperatingActivities || 0);
                 if (entry.fcf === 0 && entry.ocf !== 0) {
-                    const capEx = ext(row.capitalExpenditures);
+                    const capEx = (row.capitalExpenditures?.raw || row.capitalExpenditures || 0);
                     if (capEx) entry.fcf = entry.ocf + capEx;
                 }
             }
