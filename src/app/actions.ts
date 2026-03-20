@@ -1,6 +1,22 @@
 "use server";
 import yahooFinance from 'yahoo-finance2';
 
+// Pass a realistic browser User-Agent on every request so Vercel IPs
+// are not blocked by Yahoo Finance's bot-detection.
+// yahoo-finance2 v3 exposes this via the third "moduleOpts" argument
+// on each call (fetchOptions), NOT via setGlobalConfig.
+const YF_MODULE_OPTS = {
+  fetchOptions: {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+    },
+  },
+} as const;
+
 export type StockQuote = {
   symbol: string;
   price: number;
@@ -82,27 +98,33 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
 
     let yahooData: any = null;
     try {
-      yahooData = await yahooFinance.quoteSummary(symbol, { 
-        modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend', 'price'] 
-      } as any);
+      yahooData = await yahooFinance.quoteSummary(
+        symbol,
+        { modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend', 'price'] } as any,
+        YF_MODULE_OPTS as any
+      );
     } catch (e: any) {
       console.warn("Yahoo Finance quoteSummary Error, falling back to a simpler approach...", e.message);
       try {
-        const basicQuote: any = await yahooFinance.quote(symbol);
+        const basicQuote: any = await yahooFinance.quote(symbol, {}, YF_MODULE_OPTS as any);
         quote = {
           symbol: basicQuote.symbol,
           price: basicQuote.regularMarketPrice || 0,
           changesPercentage: basicQuote.regularMarketChangePercent || 0
         };
-        const chartRes: any = await yahooFinance.quoteSummary(symbol, { modules: ['earnings'] } as any);
+        const chartRes: any = await yahooFinance.quoteSummary(
+          symbol,
+          { modules: ['earnings'] } as any,
+          YF_MODULE_OPTS as any
+        );
         if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
              const yearly = chartRes.earnings.financialsChart.yearly || [];
              yahooData = { isFallback: true, earningsFallback: yearly };
         } else {
              yahooData = null; 
         }
-      } catch (e2) {
-         console.warn("Fallback failed too.");
+      } catch (e2: any) {
+         console.warn("Fallback failed too.", e2.message);
       }
     }
 
@@ -292,4 +314,13 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     console.error("Exception during fetch:", error);
     return null;
   }
+}
+
+/**
+ * Named alias kept for backwards-compatibility.
+ * Returns the fundamentals portion of the stock data.
+ */
+export async function getFinancialData(symbol: string): Promise<YahooFundamentals | null> {
+  const data = await getStockData(symbol);
+  return data?.fundamentals ?? null;
 }
