@@ -220,9 +220,7 @@ export default function Home() {
               <div className="w-full px-4 md:px-0 mb-20 animate-in slide-in-from-bottom-6 duration-1000" dir="rtl">
                   <h2 className="text-2xl font-bold mb-6 text-gray-200 pr-4 border-r-4 border-emerald-500 bg-gray-900/40 py-2 rounded-l-xl shadow-sm font-sans">Financials & Charts (דוחות פיננסיים)</h2>
                   <FinancialCharts 
-                      incomeHistory={fundamentals.incomeStatement || []} 
-                      balanceHistory={fundamentals.balanceSheet || []} 
-                      cashHistory={fundamentals.cashFlow || []} 
+                      financials={fundamentals.financials || []} 
                   />
               </div>
             )}
@@ -253,64 +251,29 @@ function DataRow({ label, count }: { label: string, count: number }) {
   );
 }
 
-function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incomeHistory: any[], balanceHistory: any[], cashHistory: any[] }) {
+function FinancialCharts({ financials }: { financials: any[] }) {
   const [enlargedChart, setEnlargedChart] = useState<string | null>(null);
 
   const data = useMemo(() => {
+    if (!financials || financials.length === 0) return [];
 
-    const formatSmallDate = (d: any) => {
-        if (!d) return "N/A";
-        try {
-            if (typeof d === 'object' && d.fmt) return String(d.fmt).substring(0, 4);
-            const dateObj = new Date(typeof d === 'number' && d > 3000 ? d * 1000 : d);
-            if (!isNaN(dateObj.getTime())) return dateObj.getFullYear().toString();
-            const strMatch = String(d).match(/\b(19|20)\d{2}\b/);
-            if (strMatch) return strMatch[0];
-        } catch(e) {}
-        return "N/A";
-    }
-
-    const yearMap = new Map<string, any>();
-
-    const processArray = (arr: any[], type: string) => {
-        if (!Array.isArray(arr)) return;
-        arr.forEach(row => {
-            const year = String(row.year);
-            if (year === "N/A" || !year || year === "undefined") return;
-            
-            if (!yearMap.has(year)) {
-                yearMap.set(year, { 
-                    year, rev: 0, gross: 0, opInc: 0, netInc: 0, 
-                    assets: 0, liab: 0, equity: 0, retained: 0, cash: 0, debt: 0, 
-                    fcf: 0, ocf: 0 
-                });
-            }
-            const entry = yearMap.get(year);
-            
-            if (type === 'income') {
-                entry.rev = Number(row.revenue) || 0;
-                entry.gross = Number(row.grossProfit) || 0;
-                entry.opInc = Number(row.operatingIncome) || 0;
-                entry.netInc = Number(row.netIncome) || 0;
-            } else if (type === 'balance') {
-                entry.assets = Number(row.totalAssets) || 0;
-                entry.liab = Number(row.totalLiabilities) || 0;
-                entry.equity = Number(row.totalEquity) || 0;
-                entry.retained = Number(row.retainedEarnings) || 0;
-                entry.cash = Number(row.cash) || 0;
-                entry.debt = Number(row.debt) || 0;
-            } else if (type === 'cash') {
-                entry.fcf = Number(row.freeCashFlow) || 0;
-                entry.ocf = Number(row.operatingCashFlow) || 0;
-            }
-        });
-    };
-
-    processArray(incomeHistory, 'income');
-    processArray(balanceHistory, 'balance');
-    processArray(cashHistory, 'cash');
-
-    let master = Array.from(yearMap.values()).sort((a, b) => parseInt(a.year) - parseInt(b.year));
+    let master: any[] = financials.map(row => {
+        return {
+            year: row.year,
+            rev: row.revenue || 0,
+            gross: row.grossProfit || 0,
+            opInc: row.operatingIncome || 0,
+            netInc: row.netIncome || 0,
+            assets: row.totalAssets || 0,
+            liab: row.totalLiabilities || 0,
+            equity: row.totalEquity || 0,
+            cash: row.cash || 0,
+            debt: row.debt || 0,
+            fcf: row.freeCashFlow || 0,
+            ocf: row.operatingCashFlow || 0,
+            retained: row.retainedEarnings || 0
+        };
+    }).sort((a, b) => parseInt(a.year) - parseInt(b.year));
 
     // Calculate margins and YoY
     master.forEach((m, idx) => {
@@ -339,7 +302,7 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
     });
 
     return master;
-  }, [incomeHistory, balanceHistory, cashHistory]);
+  }, [financials]);
 
   if (!data || data.length === 0) return <div className="text-gray-500">No Historical Data Found</div>;
 

@@ -8,6 +8,22 @@ export type StockQuote = {
   changesPercentage: number;
 };
 
+export type FinancialYearData = {
+  year: string;
+  revenue: number;
+  grossProfit: number;
+  operatingIncome: number;
+  netIncome: number;
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquity: number;
+  cash: number;
+  debt: number;
+  freeCashFlow: number;
+  operatingCashFlow: number;
+  retainedEarnings: number;
+};
+
 export type YahooFundamentals = {
   // Valuation
   trailingPE: number | null;
@@ -29,9 +45,7 @@ export type YahooFundamentals = {
   totalDebt: number | null;
   totalCash: number | null;
   
-  incomeStatement: any[];
-  balanceSheet: any[];
-  cashFlow: any[];
+  financials: FinancialYearData[];
 };
 
 export type StockData = {
@@ -41,7 +55,6 @@ export type StockData = {
 };
 
 export async function getStockData(symbol: string): Promise<StockData | null> {
-  // Clean Logs: Add log saying we are fetching from Yahoo Finance
   console.log(`Fetching data from Yahoo Finance for ${symbol}...`);
 
   try {
@@ -53,6 +66,7 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     const extractYear = (d: any) => {
         if (!d) return "N/A";
         try {
+            if (d instanceof Date) return d.getFullYear().toString();
             if (d.fmt) return String(d.fmt).substring(0, 4);
             const dateObj = new Date(d.raw !== undefined ? d.raw * 1000 : typeof d === 'number' && d > 3000 ? d * 1000 : d);
             if (!isNaN(dateObj.getTime())) return dateObj.getFullYear().toString();
@@ -74,8 +88,6 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       } as any);
     } catch (e: any) {
       console.warn("Yahoo Finance quoteSummary Error, falling back to a simpler approach...", e.message);
-      
-      // Add Fallback calculation exactly as requested
       try {
         const basicQuote = await yahooFinance.quote(symbol);
         quote = {
@@ -83,15 +95,13 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
           price: basicQuote.regularMarketPrice || 0,
           changesPercentage: basicQuote.regularMarketChangePercent || 0
         };
-        
-        // Simpler chart call fallback logic
         const chartRes = await yahooFinance.quoteSummary(symbol, { modules: ['earnings'] } as any);
         if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
              const yearly = chartRes.earnings.financialsChart.yearly || [];
              yahooData = { isFallback: true, earningsFallback: yearly };
         } else {
              const chartOnly = await yahooFinance.chart(symbol, { period1: '2020-01-01' });
-             yahooData = null; // We can't build fundamental history from just price chart
+             yahooData = null; 
         }
       } catch (e2) {
          console.warn("Fallback failed too.");
@@ -148,57 +158,90 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
           } catch (e) { }
       }
 
-      // Map the Yahoo data accurately directly to frontend expectations
-      const cleanIncome = (arr: any[]) => {
-          if (!arr || !Array.isArray(arr)) return [];
-          return arr.map((item: any) => {
-              const rev = item.totalRevenue?.raw || item.totalRevenue || 0;
-              let gross = item.grossProfit?.raw || item.grossProfit || item.totalGrossProfit?.raw || item.totalGrossProfit || 0;
-              if (!gross || gross === 0) {
-                  gross = rev - (item.costOfRevenue?.raw || item.costOfRevenue || 0);
+      // BRUTE FORCE ALIASING HELPER
+      const getVal = (obj: any, aliases: string[]): number => {
+          if (!obj) return 0;
+          for (const alias of aliases) {
+              if (obj[alias] !== undefined && obj[alias] !== null) {
+                  const val = obj[alias];
+                  if (typeof val === 'object' && val.raw !== undefined) return val.raw;
+                  if (typeof val === 'number') return val;
               }
-              return {
-                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
-                  revenue: rev,
-                  grossProfit: gross,
-                  operatingIncome: item.operatingIncome?.raw || item.operatingIncome || 0,
-                  netIncome: item.netIncome?.raw || item.netIncome || item.netIncomeCommonStockholders?.raw || item.netIncomeCommonStockholders || 0
-              };
-          });
+          }
+          return 0; // Fallback missing values completely to 0
       };
 
-      const cleanBalance = (arr: any[]) => {
-          if (!arr || !Array.isArray(arr)) return [];
-          return arr.map((item: any) => {
-              let parsedDebt = item.totalDebt?.raw || item.totalDebt || item.longTermDebt?.raw || item.longTermDebt || 0;
-              if (parsedDebt === 0) {
-                  parsedDebt = (item.shortLongTermDebt?.raw || item.shortLongTermDebt || 0) + (item.longTermDebt?.raw || item.longTermDebt || 0);
-              }
-              return {
-                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
-                  totalAssets: item.totalAssets?.raw || item.totalAssets || 0,
-                  totalLiabilities: item.totalLiabilitiesNetMinorityInterest?.raw || item.totalLiabilitiesNetMinorityInterest || item.totalLiab?.raw || item.totalLiab || item.totalLiabilities?.raw || item.totalLiabilities || 0,
-                  totalEquity: item.totalStockholderEquity?.raw || item.totalStockholderEquity || item.stockholdersEquity?.raw || item.stockholdersEquity || 0,
-                  cash: item.totalCashAndShortTermInvestments?.raw || item.totalCashAndShortTermInvestments || item.cashAndCashEquivalents?.raw || item.cashAndCashEquivalents || item.cash?.raw || item.cash || item.totalCash?.raw || item.totalCash || 0,
-                  debt: parsedDebt,
-                  retainedEarnings: item.retainedEarnings?.raw || item.retainedEarnings || 0
-              };
-          });
+      const incomeArr = yahooData.incomeStatementHistory?.incomeStatementHistory || [];
+      const balanceArr = yahooData.balanceSheetHistory?.balanceSheetStatements || [];
+      const cashArr = yahooData.cashflowStatementHistory?.cashflowStatements || [];
+
+      const yearMap = new Map<string, FinancialYearData>();
+
+      const ensureYear = (year: string) => {
+          if (!yearMap.has(year)) {
+              yearMap.set(year, {
+                  year, revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0,
+                  totalAssets: 0, totalLiabilities: 0, totalEquity: 0, cash: 0, debt: 0,
+                  freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0
+              });
+          }
+          return yearMap.get(year)!;
       };
+
+      // Sync By Year - Map Income Statement
+      for (const row of incomeArr) {
+          const year = extractYear(row.endDate || row.date || row.asOfDate);
+          if (year === "N/A") continue;
+          const entry = ensureYear(year);
+          
+          entry.revenue = getVal(row, ['totalRevenue', 'revenue', 'total_revenue', 'operatingRevenue']);
+          const cost = getVal(row, ['costOfRevenue', 'cost_of_revenue']);
+          let gross = getVal(row, ['grossProfit', 'gross_profit']);
+          if (gross === 0) gross = entry.revenue - cost;
+          entry.grossProfit = gross;
+          
+          entry.operatingIncome = getVal(row, ['operatingIncome', 'operating_income', 'ebit']);
+          entry.netIncome = getVal(row, ['netIncome', 'net_income', 'netIncomeCommonStockholders']);
+      }
+
+      // Sync By Year - Map Balance Sheet
+      for (const row of balanceArr) {
+          const year = extractYear(row.endDate || row.date || row.asOfDate);
+          if (year === "N/A") continue;
+          const entry = ensureYear(year);
+
+          entry.totalAssets = getVal(row, ['totalAssets', 'assets', 'total_assets']);
+          entry.totalLiabilities = getVal(row, ['totalLiabilitiesNetMinorityInterest', 'totalLiabilities', 'liabilities']);
+          entry.totalEquity = getVal(row, ['totalStockholderEquity', 'equity', 'total_equity', 'stockholdersEquity']);
+          entry.cash = getVal(row, ['cashAndCashEquivalents', 'cash', 'totalCash', 'cashAndShortTermInvestments', 'totalCashAndShortTermInvestments']);
+          
+          let dbt = getVal(row, ['totalDebt', 'debt', 'shortLongTermDebtTotal']);
+          if (dbt === 0) {
+              dbt = getVal(row, ['shortLongTermDebt']) + getVal(row, ['longTermDebt']);
+          }
+          entry.debt = dbt;
+          entry.retainedEarnings = getVal(row, ['retainedEarnings', 'retained_earnings']);
+      }
+
+      // Sync By Year - Map Cash Flow
+      for (const row of cashArr) {
+          const year = extractYear(row.endDate || row.date || row.asOfDate);
+          if (year === "N/A") continue;
+          const entry = ensureYear(year);
+
+          entry.freeCashFlow = getVal(row, ['freeCashflow', 'freeCashFlow']);
+          entry.operatingCashFlow = getVal(row, ['operatingCashflow', 'totalCashFromOperatingActivities']);
+          if (entry.freeCashFlow === 0 && entry.operatingCashFlow !== 0) {
+              entry.freeCashFlow = entry.operatingCashFlow + getVal(row, ['capitalExpenditures']);
+          }
+      }
+
+      const mergedFinancials = Array.from(yearMap.values()).sort((a, b) => parseInt(a.year) - parseInt(b.year));
       
-      const cleanCashFlow = (arr: any[]) => {
-          if (!arr || !Array.isArray(arr)) return [];
-          return arr.map((item: any) => {
-              let fcf = item.freeCashflow?.raw || item.freeCashflow || item.freeCashFlow?.raw || item.freeCashFlow || 0;
-              const ocf = item.operatingCashflow?.raw || item.operatingCashflow || item.totalCashFromOperatingActivities?.raw || item.totalCashFromOperatingActivities || 0;
-              if (fcf === 0 && ocf !== 0) fcf = ocf + (item.capitalExpenditures?.raw || item.capitalExpenditures || 0);
-              return {
-                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
-                  freeCashFlow: fcf,
-                  operatingCashFlow: ocf
-              };
-          });
-      };
+      // The "Check" Step: Before the return statement, add a check
+      if (mergedFinancials.length === 0) {
+          console.error("MAPPING FAILED: No data extracted from Yahoo");
+      }
 
       fundamentals = {
         trailingPE: ext(summary.trailingPE) || null,
@@ -218,14 +261,8 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
         totalDebt: ext(financial.totalDebt) || null,
         totalCash: ext(financial.totalCash) || null,
         
-        incomeStatement: cleanIncome(yahooData.incomeStatementHistory?.incomeStatementHistory || []),
-        balanceSheet: cleanBalance(yahooData.balanceSheetHistory?.balanceSheetStatements || []),
-        cashFlow: cleanCashFlow(yahooData.cashflowStatementHistory?.cashflowStatements || [])
+        financials: mergedFinancials
       };
-
-      if (fundamentals.incomeStatement.length === 0 && fundamentals.balanceSheet.length === 0) {
-          console.error("MAPPING FAILED: No data extracted from Yahoo");
-      }
     } else if (yahooData && yahooData.isFallback) {
          // Create partial fundamentals from earnings chart
          const incomeSt = yahooData.earningsFallback.map((item: any) => ({
@@ -233,15 +270,14 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
              revenue: ext(item.revenue),
              netIncome: ext(item.earnings),
              grossProfit: 0,
-             operatingIncome: 0
+             operatingIncome: 0,
+             totalAssets: 0, totalLiabilities: 0, totalEquity: 0, cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0
          }));
          fundamentals = {
             trailingPE: null, forwardPE: null, priceToCashFlow: null, pegRatio: null,
             grossMargin: null, operatingMargin: null, profitMargin: null, fcfMargin: null,
             roe: null, dividendYield: null, beta: null, marketCap: null, totalDebt: null, totalCash: null,
-            incomeStatement: incomeSt,
-            balanceSheet: [],
-            cashFlow: []
+            financials: incomeSt
          };
     }
 
