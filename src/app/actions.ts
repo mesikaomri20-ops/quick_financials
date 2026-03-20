@@ -1,6 +1,5 @@
 "use server";
-import YahooFinance from 'yahoo-finance2';
-const yahooFinance = new YahooFinance({ suppressNotices: ['yahooSurvey'] });
+import yahooFinance from 'yahoo-finance2';
 
 export type StockQuote = {
   symbol: string;
@@ -89,18 +88,17 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     } catch (e: any) {
       console.warn("Yahoo Finance quoteSummary Error, falling back to a simpler approach...", e.message);
       try {
-        const basicQuote = await yahooFinance.quote(symbol);
+        const basicQuote: any = await yahooFinance.quote(symbol);
         quote = {
           symbol: basicQuote.symbol,
           price: basicQuote.regularMarketPrice || 0,
           changesPercentage: basicQuote.regularMarketChangePercent || 0
         };
-        const chartRes = await yahooFinance.quoteSummary(symbol, { modules: ['earnings'] } as any);
+        const chartRes: any = await yahooFinance.quoteSummary(symbol, { modules: ['earnings'] } as any);
         if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
              const yearly = chartRes.earnings.financialsChart.yearly || [];
              yahooData = { isFallback: true, earningsFallback: yearly };
         } else {
-             const chartOnly = await yahooFinance.chart(symbol, { period1: '2020-01-01' });
              yahooData = null; 
         }
       } catch (e2) {
@@ -174,6 +172,10 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       const incomeArr = yahooData.incomeStatementHistory?.incomeStatementHistory || [];
       const balanceArr = yahooData.balanceSheetHistory?.balanceSheetStatements || [];
       const cashArr = yahooData.cashflowStatementHistory?.cashflowStatements || [];
+
+      console.log(`[${symbol}] Income rows: ${incomeArr.length}, Balance rows: ${balanceArr.length}, CashFlow rows: ${cashArr.length}`);
+      if (incomeArr.length > 0) console.log(`[${symbol}] First income row keys:`, Object.keys(incomeArr[0]));
+      if (balanceArr.length > 0) console.log(`[${symbol}] First balance row keys:`, Object.keys(balanceArr[0]));
 
       const yearMap = new Map<string, FinancialYearData>();
 
