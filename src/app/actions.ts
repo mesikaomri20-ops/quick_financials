@@ -1,21 +1,10 @@
 "use server";
 import yahooFinance from 'yahoo-finance2';
 
-// Pass a realistic browser User-Agent on every request so Vercel IPs
-// are not blocked by Yahoo Finance's bot-detection.
-// yahoo-finance2 v3 exposes this via the third "moduleOpts" argument
-// on each call (fetchOptions), NOT via setGlobalConfig.
-const YF_MODULE_OPTS = {
-  fetchOptions: {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-    },
-  },
-} as const;
+// Node 18+ (Vercel) has native globalThis.fetch — no polyfill needed.
+// We spoof a real browser User-Agent so Yahoo Finance doesn't block
+// Vercel's serverless IPs. Headers are passed inline as the third
+// "moduleOpts" argument on every yahoo-finance2 v3 call site.
 
 export type StockQuote = {
   symbol: string;
@@ -101,12 +90,36 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       yahooData = await yahooFinance.quoteSummary(
         symbol,
         { modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend', 'price'] } as any,
-        YF_MODULE_OPTS as any
+        // Inline fetchOptions — passed directly so the library cannot strip them
+        {
+          fetchOptions: {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+              'Accept-Encoding': 'gzip, deflate, br',
+            },
+          },
+        } as any
       );
     } catch (e: any) {
-      console.warn("Yahoo Finance quoteSummary Error, falling back to a simpler approach...", e.message);
+      // Log full detail so we can distinguish 403 Forbidden vs fetch-not-defined
+      console.error(`[YF] quoteSummary failed for ${symbol}:`, e.message);
+      console.error(`[YF] stack:`, e.stack);
       try {
-        const basicQuote: any = await yahooFinance.quote(symbol, {}, YF_MODULE_OPTS as any);
+        const basicQuote: any = await yahooFinance.quote(
+          symbol,
+          {},
+          {
+            fetchOptions: {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+              },
+            },
+          } as any
+        );
         quote = {
           symbol: basicQuote.symbol,
           price: basicQuote.regularMarketPrice || 0,
@@ -115,7 +128,15 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
         const chartRes: any = await yahooFinance.quoteSummary(
           symbol,
           { modules: ['earnings'] } as any,
-          YF_MODULE_OPTS as any
+          {
+            fetchOptions: {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+              },
+            },
+          } as any
         );
         if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
              const yearly = chartRes.earnings.financialsChart.yearly || [];
@@ -124,7 +145,9 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
              yahooData = null; 
         }
       } catch (e2: any) {
-         console.warn("Fallback failed too.", e2.message);
+        // Log full detail on the fallback too — tells us if it's 403 or env issue
+        console.error(`[YF] Fallback failed for ${symbol}:`, e2.message);
+        console.error(`[YF] Fallback stack:`, e2.stack);
       }
     }
 
