@@ -41,190 +41,211 @@ export type StockData = {
 };
 
 export async function getStockData(symbol: string): Promise<StockData | null> {
-  const apiKey = process.env.ALPHAVANTAGE_API_KEY;
-  if (!apiKey) {
-    console.error("ALPHAVANTAGE_API_KEY is not defined.");
-    return null;
-  }
-  
-  console.log(`Fetching data for ${symbol}...`);
+  // Clean Logs: Add log saying we are fetching from Yahoo Finance
+  console.log(`Fetching data from Yahoo Finance for ${symbol}...`);
 
   try {
-    const alphaPromise = fetch(
-      `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${symbol}&apikey=${apiKey}`,
-      { cache: 'no-store' }
-    ).then(res => res.ok ? res.json() : null);
+    const ext = (val: any) => {
+        if (val === null || val === undefined) return 0;
+        return val.raw !== undefined ? val.raw : (Number(val) || 0);
+    };
 
-    const yahooPromise = (async () => {
-      try {
-        return await yahooFinance.quoteSummary(symbol, { 
-          modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend'] 
-        } as any);
-      } catch (e: any) {
-        console.error("Yahoo Finance Error:", e);
-        return null;
-      }
-    })();
-
-    const [quoteData, yahooData] = await Promise.all([alphaPromise, yahooPromise]);
+    const extractYear = (d: any) => {
+        if (!d) return "N/A";
+        try {
+            if (d.fmt) return String(d.fmt).substring(0, 4);
+            const dateObj = new Date(d.raw !== undefined ? d.raw * 1000 : typeof d === 'number' && d > 3000 ? d * 1000 : d);
+            if (!isNaN(dateObj.getTime())) return dateObj.getFullYear().toString();
+            if (typeof d === 'string') {
+                const strMatch = d.match(/\b(19|20)\d{2}\b/);
+                if (strMatch) return strMatch[0];
+            }
+        } catch(e) {}
+        return "N/A";
+    };
 
     let quote: StockQuote | null = null;
-    let quoteRateLimited = false;
+    let fundamentals: YahooFundamentals | null = null;
 
-    if (quoteData) {
-      if (quoteData["Global Quote"] && Object.keys(quoteData["Global Quote"]).length > 0) {
-        const gQuote = quoteData["Global Quote"];
-        const changePercentStr = gQuote["10. change percent"] || "0%";
+    let yahooData: any = null;
+    try {
+      yahooData = await yahooFinance.quoteSummary(symbol, { 
+        modules: ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'incomeStatementHistory', 'balanceSheetHistory', 'cashflowStatementHistory', 'earningsTrend', 'price'] 
+      } as any);
+    } catch (e: any) {
+      console.warn("Yahoo Finance quoteSummary Error, falling back to a simpler approach...", e.message);
+      
+      // Add Fallback calculation exactly as requested
+      try {
+        const basicQuote = await yahooFinance.quote(symbol);
         quote = {
-          symbol: gQuote["01. symbol"],
-          price: parseFloat(gQuote["05. price"]),
-          changesPercentage: parseFloat(changePercentStr.replace("%", "")),
+          symbol: basicQuote.symbol,
+          price: basicQuote.regularMarketPrice || 0,
+          changesPercentage: basicQuote.regularMarketChangePercent || 0
         };
-      } else if (quoteData["Information"] || quoteData["Note"] || quoteData["Error Message"]) {
-        console.warn(`AlphaVantage API Rate Limited for ${symbol}`);
-        quoteRateLimited = true;
+        
+        // Simpler chart call fallback logic
+        const chartRes = await yahooFinance.quoteSummary(symbol, { modules: ['earnings'] } as any);
+        if (chartRes && chartRes.earnings && chartRes.earnings.financialsChart) {
+             const yearly = chartRes.earnings.financialsChart.yearly || [];
+             yahooData = { isFallback: true, earningsFallback: yearly };
+        } else {
+             const chartOnly = await yahooFinance.chart(symbol, { period1: '2020-01-01' });
+             yahooData = null; // We can't build fundamental history from just price chart
+        }
+      } catch (e2) {
+         console.warn("Fallback failed too.");
       }
     }
 
-    let fundamentals: YahooFundamentals | null = null;
-    if (yahooData) {
-      console.log("RAW INCOME:", JSON.stringify(yahooData.incomeStatementHistory?.incomeStatementHistory?.[0] || {}, null, 2));
-      console.log("RAW BALANCE:", JSON.stringify(yahooData.balanceSheetHistory?.balanceSheetStatements?.[0] || {}, null, 2));
-       const summary: any = yahooData.summaryDetail || {};
-       const financial: any = yahooData.financialData || {};
-       const stats: any = yahooData.defaultKeyStatistics || {};
-       
-       const price = summary.previousClose || 1;
-       const shares = stats.sharesOutstanding || 1;
-       const operatingCF = financial.operatingCashflow || 0;
-       
-       let priceToCashFlow = null;
-       if (operatingCF > 0 && shares > 0) {
-           priceToCashFlow = price / (operatingCF / shares);
-       }
+    if (yahooData && !yahooData.isFallback) {
+      const priceInfo = yahooData.price || {};
+      quote = {
+        symbol: priceInfo.symbol || symbol,
+        price: priceInfo.regularMarketPrice || ext(yahooData.summaryDetail?.previousClose) || 0,
+        changesPercentage: (priceInfo.regularMarketChangePercent !== undefined) ? (priceInfo.regularMarketChangePercent * 100) : 0
+      };
 
-       let fcfMargin = null;
-       const freeCashflow = financial.freeCashflow || 0;
-       const totalRevenue = financial.totalRevenue || 0;
-       if (totalRevenue > 0) {
-           fcfMargin = freeCashflow / totalRevenue;
-       }
+      const summary: any = yahooData.summaryDetail || {};
+      const financial: any = yahooData.financialData || {};
+      const stats: any = yahooData.defaultKeyStatistics || {};
+      
+      const price = quote.price || 1;
+      const shares = ext(stats.sharesOutstanding) || 1;
+      const operatingCF = ext(financial.operatingCashflow) || 0;
+      
+      let priceToCashFlow = null;
+      if (operatingCF > 0 && shares > 0) {
+          priceToCashFlow = price / (operatingCF / shares);
+      }
 
-       console.log("DEBUG - Yahoo Data:", JSON.stringify({ summary, stats }, null, 2));
+      let fcfMargin = null;
+      const freeCashflow = ext(financial.freeCashflow) || 0;
+      const totalRevenue = ext(financial.totalRevenue) || 0;
+      if (totalRevenue > 0) {
+          fcfMargin = freeCashflow / totalRevenue;
+      }
 
-       let pegRatioRaw = stats.pegRatio || stats.priceToEarningsGrowth || summary.pegRatio || summary.priceToEarningsGrowth;
-       let pegRatio = pegRatioRaw;
-       
-       if (pegRatio !== null && typeof pegRatio === 'object') {
-           pegRatio = pegRatio.raw ?? pegRatio.fmt ?? null;
-       }
+      let pegRatioRaw = stats.pegRatio || stats.priceToEarningsGrowth || summary.pegRatio || summary.priceToEarningsGrowth;
+      let pegRatio = ext(pegRatioRaw);
 
-       if (!pegRatio) {
-           try {
-               const trends = yahooData.earningsTrend?.trend || [];
-               const fiveYearTrend = trends.find((t: any) => t.period === '+5y' || t.period === '5y');
-               
-               let growthRate: any = fiveYearTrend?.growth;
-               if (growthRate !== null && typeof growthRate === 'object' && growthRate.raw !== undefined) {
-                   growthRate = growthRate.raw;
-               }
+      if (!pegRatio) {
+          try {
+              const trends = yahooData.earningsTrend?.trend || [];
+              const fiveYearTrend = trends.find((t: any) => t.period === '+5y' || t.period === '5y');
+              
+              let growthRate = ext(fiveYearTrend?.growth);
+              let forwardPeValue = ext(summary.forwardPE);
+              
+              if (growthRate && forwardPeValue) {
+                  pegRatio = forwardPeValue / (growthRate * 100);
+              } else if (financial.earningsGrowth) {
+                  let eg = ext(financial.earningsGrowth);
+                  if (eg && forwardPeValue) {
+                      pegRatio = forwardPeValue / (eg * 100);
+                  }
+              }
+          } catch (e) { }
+      }
 
-               let forwardPeValue: any = summary.forwardPE;
-               if (forwardPeValue !== null && typeof forwardPeValue === 'object' && forwardPeValue.raw !== undefined) {
-                   forwardPeValue = forwardPeValue.raw;
-               }
-               
-               if (growthRate && forwardPeValue) {
-                   pegRatio = forwardPeValue / (growthRate * 100);
-                   console.log("Calculated PEG from 5y Earnings Trend:", pegRatio);
-               } else if (financial.earningsGrowth) {
-                   let eg: any = financial.earningsGrowth;
-                   if (typeof eg === 'object' && eg.raw !== undefined) eg = eg.raw;
-                   if (eg && forwardPeValue) {
-                       pegRatio = forwardPeValue / (eg * 100);
-                       console.log("Calculated PEG from Financial Earnings Growth:", pegRatio);
-                   }
-               }
-           } catch (e) {
-               console.error("Error calculating PEG fallback:", e);
-           }
-       }
+      // Map the Yahoo data accurately directly to frontend expectations
+      const cleanIncome = (arr: any[]) => {
+          if (!arr || !Array.isArray(arr)) return [];
+          return arr.map(row => {
+              const rev = ext(row.totalRevenue);
+              let gross = ext(row.grossProfit) || ext(row.totalGrossProfit);
+              if (!gross || gross === 0) {
+                  gross = rev - ext(row.costOfRevenue);
+              }
+              return {
+                  year: extractYear(row.endDate || row.asOfDate),
+                  revenue: rev,
+                  grossProfit: gross,
+                  operatingIncome: ext(row.operatingIncome) || ext(row.ebit),
+                  netIncome: ext(row.netIncome) || ext(row.netIncomeCommonStockholders)
+              };
+          });
+      };
 
-       if (!pegRatio && apiKey) {
-           try {
-               const overviewRes = await fetch(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${symbol}&apikey=${apiKey}`, { cache: 'no-store' });
-               if (overviewRes.ok) {
-                   const overviewData = await overviewRes.json();
-                   if (overviewData && overviewData.PEGRatio && overviewData.PEGRatio !== "None") {
-                       pegRatio = parseFloat(overviewData.PEGRatio);
-                   }
-               }
-           } catch (e) {
-               console.error("AlphaVantage PEG fallback failed", e);
-           }
-       }
+      const cleanBalance = (arr: any[]) => {
+          if (!arr || !Array.isArray(arr)) return [];
+          return arr.map(row => {
+              let parsedDebt = ext(row.totalDebt) || ext(row.longTermDebt);
+              if (parsedDebt === 0) {
+                  parsedDebt = ext(row.shortLongTermDebt) + ext(row.longTermDebt);
+              }
+              return {
+                  year: extractYear(row.endDate || row.asOfDate),
+                  totalAssets: ext(row.totalAssets),
+                  totalLiabilities: ext(row.totalLiab) || ext(row.totalLiabilitiesNetMinorityInterest) || ext(row.totalLiabilities),
+                  totalEquity: ext(row.totalStockholderEquity) || ext(row.stockholdersEquity),
+                  cash: ext(row.totalCashAndShortTermInvestments) || ext(row.cashAndCashEquivalents) || ext(row.cash) || ext(row.totalCash),
+                  debt: parsedDebt,
+                  retainedEarnings: ext(row.retainedEarnings)
+              };
+          });
+      };
+      
+      const cleanCashFlow = (arr: any[]) => {
+          if (!arr || !Array.isArray(arr)) return [];
+          return arr.map(row => {
+              let fcf = ext(row.freeCashflow) || ext(row.freeCashFlow);
+              const ocf = ext(row.operatingCashflow) || ext(row.totalCashFromOperatingActivities);
+              if (fcf === 0 && ocf !== 0) fcf = ocf + ext(row.capitalExpenditures);
+              return {
+                  year: extractYear(row.endDate || row.asOfDate),
+                  freeCashFlow: fcf,
+                  operatingCashFlow: ocf
+              };
+          });
+      };
 
-       const mapHistory = (arr: any[]) => {
-           if (!arr || !Array.isArray(arr)) return [];
-           return arr.map(row => {
-               const cleaned: any = {};
-               for (const key in row) {
-                   const val = row[key];
-                   if (val && typeof val === 'object') {
-                       if (val.raw !== undefined) {
-                           cleaned[key] = val.raw;
-                       } else if (val instanceof Date) {
-                           cleaned[key] = val.toISOString();
-                       } else {
-                           cleaned[key] = val;
-                       }
-                   } else {
-                       cleaned[key] = val;
-                   }
-               }
-               // Year Sync: Ensure data is synchronized by Year (YYYY)
-               const d = row.endDate || row.asOfDate;
-               if (d) {
-                   if (d instanceof Date) cleaned.year = d.getFullYear().toString();
-                   else if (d.fmt) cleaned.year = String(d.fmt).substring(0, 4);
-                   else if (typeof d === 'string') {
-                       const strMatch = d.match(/\b(19|20)\d{2}\b/);
-                       if (strMatch) cleaned.year = strMatch[0];
-                   }
-               }
-               return cleaned;
-           });
-       };
+      fundamentals = {
+        trailingPE: ext(summary.trailingPE) || null,
+        forwardPE: ext(summary.forwardPE) || null,
+        priceToCashFlow: priceToCashFlow,
+        pegRatio: pegRatio || null,
+        
+        grossMargin: ext(financial.grossMargins) || null,
+        operatingMargin: ext(financial.operatingMargins) || null,
+        profitMargin: ext(financial.profitMargins) || null,
+        fcfMargin: fcfMargin,
 
-       fundamentals = {
-         trailingPE: summary.trailingPE || null,
-         forwardPE: summary.forwardPE || null,
-         priceToCashFlow: priceToCashFlow,
-         pegRatio: pegRatio || null,
-         
-         grossMargin: financial.grossMargins || null,
-         operatingMargin: financial.operatingMargins || null,
-         profitMargin: financial.profitMargins || null,
-         fcfMargin: fcfMargin,
-
-         roe: financial.returnOnEquity || null,
-         dividendYield: summary.dividendYield || null,
-         beta: stats.beta || summary.beta || null,
-         marketCap: summary.marketCap || (price * shares) || null,
-         totalDebt: financial.totalDebt || null,
-         totalCash: financial.totalCash || null,
-         
-         incomeStatement: mapHistory(yahooData.incomeStatementHistory?.incomeStatementHistory || []),
-         balanceSheet: mapHistory(yahooData.balanceSheetHistory?.balanceSheetStatements || []),
-         cashFlow: mapHistory(yahooData.cashflowStatementHistory?.cashflowStatements || [])
-       };
+        roe: ext(financial.returnOnEquity) || null,
+        dividendYield: ext(summary.dividendYield) || null,
+        beta: ext(stats.beta) || ext(summary.beta) || null,
+        marketCap: ext(summary.marketCap) || (price * shares) || null,
+        totalDebt: ext(financial.totalDebt) || null,
+        totalCash: ext(financial.totalCash) || null,
+        
+        incomeStatement: cleanIncome(yahooData.incomeStatementHistory?.incomeStatementHistory || []),
+        balanceSheet: cleanBalance(yahooData.balanceSheetHistory?.balanceSheetStatements || []),
+        cashFlow: cleanCashFlow(yahooData.cashflowStatementHistory?.cashflowStatements || [])
+      };
+    } else if (yahooData && yahooData.isFallback) {
+         // Create partial fundamentals from earnings chart
+         const incomeSt = yahooData.earningsFallback.map((item: any) => ({
+             year: typeof item.date === "number" ? String(item.date) : extractYear(item.date),
+             revenue: ext(item.revenue),
+             netIncome: ext(item.earnings),
+             grossProfit: 0,
+             operatingIncome: 0
+         }));
+         fundamentals = {
+            trailingPE: null, forwardPE: null, priceToCashFlow: null, pegRatio: null,
+            grossMargin: null, operatingMargin: null, profitMargin: null, fcfMargin: null,
+            roe: null, dividendYield: null, beta: null, marketCap: null, totalDebt: null, totalCash: null,
+            incomeStatement: incomeSt,
+            balanceSheet: [],
+            cashFlow: []
+         };
     }
 
     if (!quote && !fundamentals) {
         return null; 
     }
 
-    return { quote, fundamentals, quoteRateLimited };
+    return { quote, fundamentals, quoteRateLimited: false };
   } catch (error) {
     console.error("Exception during fetch:", error);
     return null;

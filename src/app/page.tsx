@@ -275,10 +275,8 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
     const processArray = (arr: any[], type: string) => {
         if (!Array.isArray(arr)) return;
         arr.forEach(row => {
-            // Priority: Explicit year from mapHistory, then fallback
-            let dateVal = row.endDate?.fmt || row.endDate || row.asOfDate?.fmt || row.asOfDate;
-            const year = row.year || formatSmallDate(dateVal);
-            if (year === "N/A" || !year) return;
+            const year = String(row.year);
+            if (year === "N/A" || !year || year === "undefined") return;
             
             if (!yearMap.has(year)) {
                 yearMap.set(year, { 
@@ -290,35 +288,20 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
             const entry = yearMap.get(year);
             
             if (type === 'income') {
-                entry.rev = (row.totalRevenue?.raw || row.totalRevenue || 0);
-                let gross = (row.grossProfit?.raw || row.grossProfit || row.totalGrossProfit?.raw || row.totalGrossProfit || 0);
-                // Manual Calculation: If grossProfit is missing or 0, calculate it manually as: revenue - costOfRevenue
-                if (!gross || gross === 0) {
-                    const cost = (row.costOfRevenue?.raw || row.costOfRevenue || 0);
-                    gross = entry.rev - cost;
-                }
-                entry.gross = gross;
-                entry.opInc = (row.operatingIncome?.raw || row.operatingIncome || 0);
-                entry.netInc = (row.netIncome?.raw || row.netIncome || row.netIncomeCommonStockholders?.raw || row.netIncomeCommonStockholders || 0);
+                entry.rev = Number(row.revenue) || 0;
+                entry.gross = Number(row.grossProfit) || 0;
+                entry.opInc = Number(row.operatingIncome) || 0;
+                entry.netInc = Number(row.netIncome) || 0;
             } else if (type === 'balance') {
-                entry.assets = (row.totalAssets?.raw || row.totalAssets || 0);
-                entry.liab = (row.totalLiabilitiesNetMinorityInterest?.raw || row.totalLiabilitiesNetMinorityInterest || row.totalLiab?.raw || row.totalLiab || row.totalLiabilities?.raw || row.totalLiabilities || 0);
-                entry.equity = (row.totalStockholderEquity?.raw || row.totalStockholderEquity || row.stockholdersEquity?.raw || row.stockholdersEquity || 0);
-                entry.retained = (row.retainedEarnings?.raw || row.retainedEarnings || 0);
-                entry.cash = (row.totalCashAndShortTermInvestments?.raw || row.totalCashAndShortTermInvestments || row.cashAndCashEquivalents?.raw || row.cashAndCashEquivalents || row.cash?.raw || row.cash || row.totalCash?.raw || row.totalCash || 0);
-                
-                let parsedDebt = (row.totalDebt?.raw || row.totalDebt || row.longTermDebt?.raw || row.longTermDebt || 0);
-                if (parsedDebt === 0) {
-                    parsedDebt = (row.shortLongTermDebt?.raw || row.shortLongTermDebt || 0) + (row.longTermDebt?.raw || row.longTermDebt || 0);
-                }
-                entry.debt = parsedDebt;
+                entry.assets = Number(row.totalAssets) || 0;
+                entry.liab = Number(row.totalLiabilities) || 0;
+                entry.equity = Number(row.totalEquity) || 0;
+                entry.retained = Number(row.retainedEarnings) || 0;
+                entry.cash = Number(row.cash) || 0;
+                entry.debt = Number(row.debt) || 0;
             } else if (type === 'cash') {
-                entry.fcf = (row.freeCashflow?.raw || row.freeCashflow || row.freeCashFlow?.raw || row.freeCashFlow || 0);
-                entry.ocf = (row.operatingCashflow?.raw || row.operatingCashflow || row.totalCashFromOperatingActivities?.raw || row.totalCashFromOperatingActivities || 0);
-                if (entry.fcf === 0 && entry.ocf !== 0) {
-                    const capEx = (row.capitalExpenditures?.raw || row.capitalExpenditures || 0);
-                    if (capEx) entry.fcf = entry.ocf + capEx;
-                }
+                entry.fcf = Number(row.freeCashFlow) || 0;
+                entry.ocf = Number(row.operatingCashFlow) || 0;
             }
         });
     };
