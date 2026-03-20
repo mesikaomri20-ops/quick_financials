@@ -164,6 +164,38 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
            }
        }
 
+       const mapHistory = (arr: any[]) => {
+           if (!arr || !Array.isArray(arr)) return [];
+           return arr.map(row => {
+               const cleaned: any = {};
+               for (const key in row) {
+                   const val = row[key];
+                   if (val && typeof val === 'object') {
+                       if (val.raw !== undefined) {
+                           cleaned[key] = val.raw;
+                       } else if (val instanceof Date) {
+                           cleaned[key] = val.toISOString();
+                       } else {
+                           cleaned[key] = val;
+                       }
+                   } else {
+                       cleaned[key] = val;
+                   }
+               }
+               // Year Sync: Ensure data is synchronized by Year (YYYY)
+               const d = row.endDate || row.asOfDate;
+               if (d) {
+                   if (d instanceof Date) cleaned.year = d.getFullYear().toString();
+                   else if (d.fmt) cleaned.year = String(d.fmt).substring(0, 4);
+                   else if (typeof d === 'string') {
+                       const strMatch = d.match(/\b(19|20)\d{2}\b/);
+                       if (strMatch) cleaned.year = strMatch[0];
+                   }
+               }
+               return cleaned;
+           });
+       };
+
        fundamentals = {
          trailingPE: summary.trailingPE || null,
          forwardPE: summary.forwardPE || null,
@@ -182,9 +214,9 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
          totalDebt: financial.totalDebt || null,
          totalCash: financial.totalCash || null,
          
-         incomeStatement: yahooData.incomeStatementHistory?.incomeStatementHistory || [],
-         balanceSheet: yahooData.balanceSheetHistory?.balanceSheetStatements || [],
-         cashFlow: yahooData.cashflowStatementHistory?.cashflowStatements || []
+         incomeStatement: mapHistory(yahooData.incomeStatementHistory?.incomeStatementHistory || []),
+         balanceSheet: mapHistory(yahooData.balanceSheetHistory?.balanceSheetStatements || []),
+         cashFlow: mapHistory(yahooData.cashflowStatementHistory?.cashflowStatements || [])
        };
     }
 

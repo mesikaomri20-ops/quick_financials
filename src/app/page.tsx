@@ -260,8 +260,8 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
     // Advanced extraction to handle edge cases of zero vs null vs formatting objects
     const ext = (val: any) => {
         if (val === null || val === undefined) return 0;
-        if (typeof val === 'object' && val.raw !== undefined) return val.raw;
-        return Number(val) || 0;
+        // Data Mapping: Always use the .raw value from the API response
+        return val.raw !== undefined ? val.raw : (Number(val) || 0);
     };
     
     const formatSmallDate = (d: any) => {
@@ -281,8 +281,9 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
     const processArray = (arr: any[], type: string) => {
         if (!Array.isArray(arr)) return;
         arr.forEach(row => {
-            const year = formatSmallDate(row.endDate || row.asOfDate);
-            if (year === "N/A") return;
+            // Priority: Explicit year from mapHistory, then fallback
+            const year = row.year || formatSmallDate(row.endDate || row.asOfDate);
+            if (year === "N/A" || !year) return;
             
             if (!yearMap.has(year)) {
                 yearMap.set(year, { 
@@ -295,7 +296,12 @@ function FinancialCharts({ incomeHistory, balanceHistory, cashHistory }: { incom
             
             if (type === 'income') {
                 entry.rev = ext(row.totalRevenue);
-                entry.gross = ext(row.grossProfit) || ext(row.totalGrossProfit);
+                let gross = ext(row.grossProfit) || ext(row.totalGrossProfit);
+                // Manual Calculation: If grossProfit is missing or 0, calculate it manually as: revenue - costOfRevenue
+                if (!gross || gross === 0) {
+                    gross = entry.rev - ext(row.costOfRevenue);
+                }
+                entry.gross = gross;
                 entry.opInc = ext(row.operatingIncome) || ext(row.ebit);
                 entry.netInc = ext(row.netIncome) || ext(row.netIncomeCommonStockholders);
             } else if (type === 'balance') {
