@@ -151,49 +151,49 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       // Map the Yahoo data accurately directly to frontend expectations
       const cleanIncome = (arr: any[]) => {
           if (!arr || !Array.isArray(arr)) return [];
-          return arr.map(row => {
-              const rev = ext(row.totalRevenue);
-              let gross = ext(row.grossProfit) || ext(row.totalGrossProfit);
+          return arr.map((item: any) => {
+              const rev = item.totalRevenue?.raw || item.totalRevenue || 0;
+              let gross = item.grossProfit?.raw || item.grossProfit || item.totalGrossProfit?.raw || item.totalGrossProfit || 0;
               if (!gross || gross === 0) {
-                  gross = rev - ext(row.costOfRevenue);
+                  gross = rev - (item.costOfRevenue?.raw || item.costOfRevenue || 0);
               }
               return {
-                  year: extractYear(row.endDate || row.asOfDate),
+                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
                   revenue: rev,
                   grossProfit: gross,
-                  operatingIncome: ext(row.operatingIncome) || ext(row.ebit),
-                  netIncome: ext(row.netIncome) || ext(row.netIncomeCommonStockholders)
+                  operatingIncome: item.operatingIncome?.raw || item.operatingIncome || 0,
+                  netIncome: item.netIncome?.raw || item.netIncome || item.netIncomeCommonStockholders?.raw || item.netIncomeCommonStockholders || 0
               };
           });
       };
 
       const cleanBalance = (arr: any[]) => {
           if (!arr || !Array.isArray(arr)) return [];
-          return arr.map(row => {
-              let parsedDebt = ext(row.totalDebt) || ext(row.longTermDebt);
+          return arr.map((item: any) => {
+              let parsedDebt = item.totalDebt?.raw || item.totalDebt || item.longTermDebt?.raw || item.longTermDebt || 0;
               if (parsedDebt === 0) {
-                  parsedDebt = ext(row.shortLongTermDebt) + ext(row.longTermDebt);
+                  parsedDebt = (item.shortLongTermDebt?.raw || item.shortLongTermDebt || 0) + (item.longTermDebt?.raw || item.longTermDebt || 0);
               }
               return {
-                  year: extractYear(row.endDate || row.asOfDate),
-                  totalAssets: ext(row.totalAssets),
-                  totalLiabilities: ext(row.totalLiab) || ext(row.totalLiabilitiesNetMinorityInterest) || ext(row.totalLiabilities),
-                  totalEquity: ext(row.totalStockholderEquity) || ext(row.stockholdersEquity),
-                  cash: ext(row.totalCashAndShortTermInvestments) || ext(row.cashAndCashEquivalents) || ext(row.cash) || ext(row.totalCash),
+                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
+                  totalAssets: item.totalAssets?.raw || item.totalAssets || 0,
+                  totalLiabilities: item.totalLiabilitiesNetMinorityInterest?.raw || item.totalLiabilitiesNetMinorityInterest || item.totalLiab?.raw || item.totalLiab || item.totalLiabilities?.raw || item.totalLiabilities || 0,
+                  totalEquity: item.totalStockholderEquity?.raw || item.totalStockholderEquity || item.stockholdersEquity?.raw || item.stockholdersEquity || 0,
+                  cash: item.totalCashAndShortTermInvestments?.raw || item.totalCashAndShortTermInvestments || item.cashAndCashEquivalents?.raw || item.cashAndCashEquivalents || item.cash?.raw || item.cash || item.totalCash?.raw || item.totalCash || 0,
                   debt: parsedDebt,
-                  retainedEarnings: ext(row.retainedEarnings)
+                  retainedEarnings: item.retainedEarnings?.raw || item.retainedEarnings || 0
               };
           });
       };
       
       const cleanCashFlow = (arr: any[]) => {
           if (!arr || !Array.isArray(arr)) return [];
-          return arr.map(row => {
-              let fcf = ext(row.freeCashflow) || ext(row.freeCashFlow);
-              const ocf = ext(row.operatingCashflow) || ext(row.totalCashFromOperatingActivities);
-              if (fcf === 0 && ocf !== 0) fcf = ocf + ext(row.capitalExpenditures);
+          return arr.map((item: any) => {
+              let fcf = item.freeCashflow?.raw || item.freeCashflow || item.freeCashFlow?.raw || item.freeCashFlow || 0;
+              const ocf = item.operatingCashflow?.raw || item.operatingCashflow || item.totalCashFromOperatingActivities?.raw || item.totalCashFromOperatingActivities || 0;
+              if (fcf === 0 && ocf !== 0) fcf = ocf + (item.capitalExpenditures?.raw || item.capitalExpenditures || 0);
               return {
-                  year: extractYear(row.endDate || row.asOfDate),
+                  year: new Date(item.endDate || item.asOfDate).getFullYear().toString(),
                   freeCashFlow: fcf,
                   operatingCashFlow: ocf
               };
@@ -222,6 +222,10 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
         balanceSheet: cleanBalance(yahooData.balanceSheetHistory?.balanceSheetStatements || []),
         cashFlow: cleanCashFlow(yahooData.cashflowStatementHistory?.cashflowStatements || [])
       };
+
+      if (fundamentals.incomeStatement.length === 0 && fundamentals.balanceSheet.length === 0) {
+          console.error("MAPPING FAILED: No data extracted from Yahoo");
+      }
     } else if (yahooData && yahooData.isFallback) {
          // Create partial fundamentals from earnings chart
          const incomeSt = yahooData.earningsFallback.map((item: any) => ({
