@@ -47,16 +47,27 @@ export default function Home() {
     
     try {
       const result = await getStockData(symbol);
+      
+      // Console Alert for immediate feedback
+      if (typeof window !== 'undefined') {
+        window.alert('Data arrived: ' + JSON.stringify(result));
+      }
+
       if (result) {
-        setData(result);
-        setQuoteState(result.quote);
+        // Array Check (extra safety for FMP-style responses)
+        const safeData = Array.isArray(result) ? result[0] : result;
+        setData(safeData);
+        setQuoteState(safeData.quote);
       } else {
+        // Hardcoded Fallback for testing
         setData(null);
-        setQuoteState(null);
+        setQuoteState({ name: 'Test Mode', price: 999, symbol: 'TEST', changesPercentage: 1.5, companyName: 'Test Corporation' } as any);
       }
     } catch (e) {
       console.error("Fetch failed:", e);
       setError(true);
+      // Catch-all fallback
+      setQuoteState({ name: 'Error Fallback', price: 0, symbol: 'ERR', changesPercentage: 0 } as any);
     } finally {
       setLoading(false);
     }
