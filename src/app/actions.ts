@@ -177,9 +177,10 @@ export async function getStockData(
     if (!fmpQuote.name && !is429.value) {
       profile = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
     }
-    await sleep(1500);
-    const ratios     = (await fmpSafe("/ratios-ttm",      { symbol: ticker }, is429))[0] ?? {}; await sleep(1500);
-    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }, is429))[0] ?? {};
+
+    // Removed key-metrics and ratios-ttm fetching completely per user instruction to stop 429s.
+    const ratios: Record<string, any> = {};
+    const keyMetrics: Record<string, any> = {};
 
     // Removed the abort on 429 so the UI still shows whatever data succeeded (if any).
 

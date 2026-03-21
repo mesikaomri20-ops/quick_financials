@@ -29,6 +29,8 @@ function formatValue(
 
 // ─── Home ──────────────────────────────────────────────────────────────────
 
+let globalIsFetching = false;
+
 export default function Home() {
   const [tickerInput, setTickerInput] = useState("");
   const [currentTicker, setCurrentTicker] = useState("AAPL");
@@ -37,12 +39,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
-  // Prevent concurrent fetches (rapid toggle / double-click)
-  const isSearching = useRef(false);
-
   const fetchData = async (symbol: string, p: Period) => {
-    // If the useEffect triggered this but we are already fetching (and it wasn't locked by handleSearch just now),
-    // we should let it proceed ONLY if it's a new request that bypassed the button lock.
     setLoading(true);
     setError(false);
     setRateLimited(false);
@@ -59,22 +56,31 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
-      isSearching.current = false;
     }
   };
 
-  // Re-fetch when ticker OR period changes
-  useEffect(() => { fetchData(currentTicker, period); }, [currentTicker, period]);
+  // Re-fetch only strictly on mount or period toggle
+  useEffect(() => { 
+    if (globalIsFetching) return;
+    globalIsFetching = true;
+    fetchData(currentTicker, period).finally(() => {
+      globalIsFetching = false;
+    });
+  }, [period]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSearching.current) return;
+    if (globalIsFetching) return;
     
     if (tickerInput.trim()) {
-      isSearching.current = true;
+      globalIsFetching = true;
       setLoading(true); // Lock the UI button instantly to block double-clicks
-      setCurrentTicker(tickerInput.trim().toUpperCase());
+      const newTicker = tickerInput.trim().toUpperCase();
+      setCurrentTicker(newTicker);
       setTickerInput("");
+      
+      await fetchData(newTicker, period);
+      globalIsFetching = false;
     }
   };
 
@@ -98,10 +104,10 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:opacity-75 disabled:cursor-not-allowed disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
           >
             {loading ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
