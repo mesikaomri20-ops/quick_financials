@@ -3,6 +3,8 @@
 // ─── Config ────────────────────────────────────────────────────────────────
 const FMP_KEY  = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
 const FMP_BASE = "https://financialmodelingprep.com/api/v3";
+const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
+const FRED_BASE = "https://api.stlouisfed.org/fred";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +59,26 @@ export type StockData = {
   fundamentals: YahooFundamentals | null;
   quoteRateLimited?: boolean;
   rateLimited?: boolean;
+};
+
+export type MacroObservation = {
+  date: string;
+  value: number;
+};
+
+export type MacroIndicator = {
+  name: string;
+  current: number;
+  previous: number;
+  change: number;
+  history: MacroObservation[];
+};
+
+export type MacroData = {
+  rates: MacroIndicator;
+  inflation: MacroIndicator;
+  unemployment: MacroIndicator;
+  yield10y: MacroIndicator;
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -219,4 +241,64 @@ export async function getFinancialData(
 ): Promise<YahooFundamentals | null> {
   const data = await getStockData(symbol, period);
   return data?.fundamentals || null;
+}
+
+// ─── Macro Data (FRED) ──────────────────────────────────────────────────────
+
+async function fetchFred(seriesId: string): Promise<MacroObservation[]> {
+  try {
+    const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=100`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data.observations || []).map((obs: any) => ({
+      date: obs.date,
+      value: parseFloat(obs.value) || 0
+    })).reverse();
+  } catch (e) {
+    console.error(`[FRED] Error fetching ${seriesId}:`, e);
+    return [];
+  }
+}
+
+export async function getMacroData(): Promise<MacroData | null> {
+  try {
+    const [fedFunds, cpi, unrate, dgs10] = await Promise.all([
+      fetchFred("FEDFUNDS"),
+      fetchFred("CPIAUCSL"),
+      fetchFred("UNRATE"),
+      fetchFred("DGS10")
+    ]);
+
+    const processIndicator = (name: string, data: MacroObservation[]) => {
+      const latest = data[data.length - 1];
+      const prev = data[data.length - 2];
+      return {
+        name,
+        current: latest?.value || 0,
+        previous: prev?.value || 0,
+        change: latest && prev ? latest.value - prev.value : 0,
+        history: data.slice(-60) // Last 5 years (monthly data)
+      };
+    };
+
+    // Calculate YoY Inflation for CPI
+    const inflationHistory: MacroObservation[] = [];
+    for (let i = 12; i < cpi.length; i++) {
+      const current = cpi[i];
+      const past = cpi[i - 12];
+      const yoy = ((current.value / past.value) - 1) * 100;
+      inflationHistory.push({ date: current.date, value: yoy });
+    }
+
+    return {
+      rates: processIndicator("Fed Funds Rate", fedFunds),
+      inflation: processIndicator("Inflation (CPI YoY)", inflationHistory),
+      unemployment: processIndicator("Unemployment Rate", unrate),
+      yield10y: processIndicator("10Y Treasury Yield", dgs10)
+    };
+  } catch (e) {
+    console.error("[Macro] Error state:", e);
+    return null;
+  }
 }
