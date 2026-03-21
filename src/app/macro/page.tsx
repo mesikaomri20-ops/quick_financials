@@ -166,7 +166,11 @@ export default function MacroPage() {
                       fontSize={10} 
                       tickLine={false} 
                       axisLine={false}
-                      tickFormatter={(d) => d.substring(2, 7)} // YY-MM
+                      tickCount={6}
+                      tickFormatter={(d) => {
+                        const [y, m] = d.split('-');
+                        return `${y.substring(2)}-${m}`;
+                      }}
                     />
                     <YAxis 
                       stroke="#4b5563" 

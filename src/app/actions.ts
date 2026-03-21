@@ -245,6 +245,34 @@ export async function getFinancialData(
 
 // ─── Macro Data (FRED) ──────────────────────────────────────────────────────
 
+function cleanMacroData(data: MacroObservation[]): MacroObservation[] {
+  if (data.length < 2) return data;
+  const cleaned: MacroObservation[] = [data[0]];
+  
+  for (let i = 1; i < data.length; i++) {
+    const current = data[i];
+    const prev = cleaned[cleaned.length - 1];
+    
+    // 1. Absolute zero check for financial rates (usually an error if it's a single point)
+    if (current.value === 0 && prev.value > 0.1) continue;
+    
+    // 2. 50% Deviation Check (Outlier Detection)
+    // If a value drops or spikes by more than 50% in a single monthly observation,
+    // it's statistically highly unlikely for these macro metrics.
+    const diff = Math.abs(current.value - prev.value);
+    const threshold = Math.abs(prev.value) * 0.5;
+    
+    if (diff > threshold && prev.value !== 0) {
+      // Skip this anomalous point
+      console.warn(`[Macro Clean] Removing outlier at ${current.date}: ${current.value} (Prev: ${prev.value})`);
+      continue;
+    }
+    
+    cleaned.push(current);
+  }
+  return cleaned;
+}
+
 async function fetchFred(seriesId: string): Promise<MacroObservation[]> {
   try {
     const url = `${FRED_BASE}/series/observations?series_id=${seriesId}&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=100`;
@@ -292,10 +320,10 @@ export async function getMacroData(): Promise<MacroData | null> {
     }
 
     return {
-      rates: processIndicator("Fed Funds Rate", fedFunds),
-      inflation: processIndicator("Inflation (CPI YoY)", inflationHistory),
-      unemployment: processIndicator("Unemployment Rate", unrate),
-      yield10y: processIndicator("10Y Treasury Yield", dgs10)
+      rates: processIndicator("Fed Funds Rate", cleanMacroData(fedFunds)),
+      inflation: processIndicator("Inflation (CPI YoY)", cleanMacroData(inflationHistory)),
+      unemployment: processIndicator("Unemployment Rate", cleanMacroData(unrate)),
+      yield10y: processIndicator("10Y Treasury Yield", cleanMacroData(dgs10))
     };
   } catch (e) {
     console.error("[Macro] Error state:", e);
