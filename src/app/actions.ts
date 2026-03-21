@@ -348,7 +348,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export async function analyzeStock(data: StockData): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash" }, { apiVersion: 'v1' });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }, { apiVersion: 'v1' });
 
     // Format a concise JSON payload to save tokens
     const payload = {
@@ -385,6 +385,7 @@ ${JSON.stringify(payload, null, 2)}
 
 Provide a concise, professional analysis in **Hebrew**. Use bullet points. Focus purely on assessing the financial health, growth trajectory, risks (e.g., debt levels), and overall quality of the business based strictly on the provided numbers. Do not give financial advice, just the hard analysis.`;
 
+    console.log("[analyzeStock] Sending data to Gemini for analysis...");
     const result = await model.generateContent(prompt);
     return result.response.text();
   } catch (error: any) {
