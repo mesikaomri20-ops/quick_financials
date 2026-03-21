@@ -272,35 +272,35 @@ export async function getStockData(
     const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
     const mktCap = n(fmpQuote.marketCap) || n(profile.marketCap);
 
-    // Helper to strictly clamp margins to [-100, 100] per user request with decimal fallback
-    const calcMargin = (metric: any, rev: any): number | null => {
-      const num = n(metric);
-      const den = n(rev);
-      if (den <= 0) return null;
+    // Manual calculation of margins from income statement
+    const calcMargin = (numData: any, denData: any): number | null => {
+      const num = n(numData);
+      const den = n(denData);
+      if (den === 0) return null;
+      
       let res = (num / den) * 100;
-      // If result is huge, FMP likely provided the raw percentage as an integer initially
       if (res > 100 || res < -100) {
-        res = num / den; // retry without * 100
+        res = num / den; // raw decimal fallback
       }
-      if (res > 100 || res < -100) return null; // Likely an API error as per user constraints
+      // Data Sanitization rule:
+      if (res > 100 || res < -100) return null; 
       return res;
     };
 
     const nOrNullSafe = (val: any) => { const x = n(val); return x === 0 && !val ? null : x; }
 
-    // Margins — strictly calculated as (Metric / Revenue) * 100
     const grossMarginDerived     = calcMargin(i0.grossProfit, i0.revenue);
     const operatingMarginDerived = calcMargin(i0.operatingIncome, i0.revenue);
     const profitMarginDerived    = calcMargin(i0.netIncome, i0.revenue);
     const fcfMarginDerived       = calcMargin(c0.freeCashFlow, i0.revenue);
 
-    // Derived ROE (Strictly totalStockholdersEquity)
-    const tEq       = n(b0.totalStockholdersEquity);
+    // ROE strictly: (Net Income / Total Stockholders Equity) * 100
     let roeDerived = null;
-    if (tEq > 0) {
-      let res = (n(i0.netIncome) / tEq) * 100;
-      if (res > 100 || res < -100) res = n(i0.netIncome) / tEq;
-      roeDerived = (res > 100 || res < -100) ? null : res;
+    const tEq = n(b0.totalStockholdersEquity);
+    if (tEq !== 0) {
+      let roe = (n(i0.netIncome) / tEq) * 100;
+      if (roe > 100 || roe < -100) roe = n(i0.netIncome) / tEq;
+      roeDerived = (roe > 100 || roe < -100) ? null : roe;
     }
 
     // Exact fields requested by User
