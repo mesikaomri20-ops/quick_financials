@@ -64,7 +64,7 @@ export default function Sidebar() {
   return (
     <>
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-border-lux">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 glass border-b border-white/10">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2">
             <div className="bg-foreground p-1.5 rounded-lg">
@@ -114,7 +114,7 @@ export default function Sidebar() {
             </button>
             
             {user ? (
-              <div className="flex items-center justify-between p-4 rounded-xl border border-border-lux">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-white/10">
                 <div className="flex items-center gap-3">
                   <img src={user.photoURL || ""} alt="" className="w-10 h-10 rounded-full" />
                   <span className="font-bold">{user.displayName}</span>
@@ -141,7 +141,7 @@ export default function Sidebar() {
         {/* Collapse Toggle */}
         <button 
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-12 w-6 h-6 bg-background border border-border-lux rounded-full flex items-center justify-center hover:bg-foreground/5 transition-all z-40 shadow-xl opacity-0 group-hover/sidebar:opacity-100"
+          className="absolute -right-3 top-12 w-6 h-6 bg-background border border-white/10 rounded-full flex items-center justify-center hover:bg-foreground/5 transition-all z-40 shadow-xl opacity-0 group-hover/sidebar:opacity-100"
         >
           {isCollapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
         </button>
@@ -167,7 +167,7 @@ export default function Sidebar() {
               <img 
                 src={user.photoURL || ""} 
                 alt="" 
-                className="w-10 h-10 rounded-lg border border-border-lux shrink-0 object-cover" 
+                className="w-10 h-10 rounded-lg border border-white/10 shrink-0 object-cover" 
               />
               {!isCollapsed && (
                 <div className="flex-1 min-w-0">

@@ -9,7 +9,7 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-border-lux: var(--border-lux);
   --color-accent-gold: #D4AF37;
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-inter);
   --font-mono: var(--font-geist-mono);
   --border-radius-lux: 0.5rem;
 }
@@ -31,7 +31,7 @@
   --card-foreground: #FAFAFA;
   --sidebar: #0A0A0A;
   --sidebar-foreground: #FAFAFA;
-  --border-lux: rgba(255, 255, 255, 0.1);
+  --border-lux: rgba(255, 255, 255, 0.1); /* border-white/10 */
 }
 
 body {
