@@ -110,182 +110,136 @@ export default function Home() {
   const fundamentals = data?.fundamentals;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col items-center p-8 text-white">
+    <div className="min-h-screen bg-background flex flex-col items-center p-4 md:p-8 text-foreground transition-colors duration-300">
 
       {/* Search Bar */}
-      <div className="w-full max-w-4xl mb-8 flex justify-center mt-10">
+      <div className="w-full max-w-4xl mb-12 flex flex-col items-center mt-20 gap-8">
+        <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none text-center">
+          Market <span className="text-accent-gold italic opacity-80">Terminal</span>
+        </h1>
         <form onSubmit={handleSearch} className="flex space-x-2 w-full max-w-md">
           <input
             type="text"
             value={tickerInput}
             onChange={(e) => setTickerInput(e.target.value)}
-            placeholder="Search ticker (e.g. NVDA)"
+            placeholder="Search Ticker..."
             disabled={loading}
-            className="flex-1 px-4 py-3 bg-gray-900 border border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-white placeholder-gray-500 transition-all font-medium tracking-wide shadow-sm disabled:opacity-50"
+            className="flex-1 px-5 py-3.5 bg-card/50 backdrop-blur-sm border border-foreground/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-foreground placeholder-foreground/30 transition-all font-medium tracking-wide shadow-sm disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-700 disabled:opacity-75 disabled:cursor-not-allowed disabled:text-gray-400 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
+            className="px-8 py-3.5 bg-foreground text-background hover:opacity-90 disabled:opacity-50 font-black rounded-2xl transition-all shadow-lg active:scale-95 flex items-center gap-2 uppercase text-[10px] tracking-[0.2em]"
           >
-            {loading ? (
-              <svg className="w-4 h-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-            ) : null}
-            {loading ? "Searching..." : "Search"}
+            {loading ? "Searching..." : "Execute"}
           </button>
         </form>
       </div>
 
       {/* Main Content Area */}
-      <div className="w-full max-w-4xl flex flex-col items-center">
-        {/* Raw Data Dump (Debug) */}
-        <div className="w-full bg-black/50 p-4 rounded-xl mb-6 border border-gray-800 font-mono text-xs overflow-auto max-h-40">
-          <p className="text-gray-500 mb-2 uppercase tracking-widest text-[10px]">Raw Quote Data:</p>
-          <pre>{JSON.stringify(quote, null, 2)}</pre>
-        </div>
-
-        <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+      <div className="w-full max-w-5xl flex flex-col items-center">
+        <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-700">
 
             {/* Quote Card */}
             {quote ? (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-sm w-full mb-12 transform transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
-                <div className="flex justify-between items-start mb-6 relative z-10">
+              <div className="bg-card/40 backdrop-blur-xl border border-foreground/5 rounded-[2.5rem] shadow-2xl p-10 max-w-sm w-full mb-16 transform transition-all hover:scale-[1.01] duration-500 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full filter blur-[80px] -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors duration-700 pointer-events-none"></div>
+                
+                <div className="flex justify-between items-start mb-8 relative z-10">
                   <div className="flex flex-col">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       {quote.image && (
                         /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={quote.image} alt="logo" className="w-10 h-10 rounded-full bg-white p-1 object-contain shadow-sm" />
+                        <img src={quote.image} alt="logo" className="w-12 h-12 rounded-2xl bg-white p-1.5 object-contain shadow-sm border border-foreground/5" />
                       )}
-                      <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                      <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none">
                         {quote.symbol}
                       </h1>
                     </div>
                     {quote.companyName && (
-                      <div className="mt-3">
-                        <span className="text-xl font-bold text-gray-200 shadow-sm leading-tight block w-full pr-4" title={quote.companyName}>
+                      <div className="mt-4">
+                        <span className="text-lg font-bold text-foreground/60 leading-tight block w-full pr-4 uppercase tracking-wider text-[10px]" title={quote.companyName}>
                           {quote.companyName}
                         </span>
                       </div>
                     )}
                   </div>
-                  <span className="text-xs font-bold text-gray-400 px-3 py-1.5 bg-gray-800/80 rounded-lg uppercase tracking-wider shadow-inner">
-                    Quote
+                  <span className="text-[9px] font-black text-foreground/30 px-3 py-1.5 bg-foreground/5 rounded-full uppercase tracking-[0.2em] border border-foreground/5">
+                    Terminal_Live
                   </span>
                 </div>
-                <div className="flex flex-col space-y-5 relative z-10">
+
+                <div className="flex flex-col space-y-6 relative z-10">
                   <div className="flex justify-between items-end">
-                    <span className="text-gray-500 text-sm font-medium mb-1">Price</span>
-                    <span className="text-5xl font-black tracking-tight">${quote.price.toFixed(2)}</span>
+                    <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Market Price</span>
+                    <span className="text-6xl font-extralight tracking-tighter">${quote.price.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between items-center pt-3 border-t border-gray-800/50 mt-2">
-                    <span className="text-gray-500 text-sm font-medium">24h Change</span>
-                    <span className={`text-xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                      {quote.changesPercentage >= 0 ? (
-                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                        </svg>
-                      ) : (
-                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
-                        </svg>
-                      )}
+                  <div className="flex justify-between items-center pt-6 border-t border-foreground/5 mt-4">
+                    <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em]">Volatility 24H</span>
+                    <span className={`text-2xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {quote.changesPercentage > 0 ? "+" : ""}
                       {quote.changesPercentage.toFixed(2)}%
                     </span>
                   </div>
                 </div>
               </div>
-            ) : data?.quoteRateLimited ? (
-              <div className="bg-gray-900 border-2 border-dashed border-rose-900/40 rounded-2xl p-6 max-w-sm w-full mb-12 flex flex-col items-center justify-center text-center shadow-lg">
-                <p className="text-gray-300 font-bold tracking-wide">Price server busy</p>
-                <p className="text-gray-500 text-sm mt-1">Showing fundamental data only</p>
-              </div>
             ) : null}
 
             {/* Fundamentals */}
             {fundamentals && (
-              <div className="w-full mb-16 animate-in slide-in-from-bottom-5 duration-700" dir="rtl">
-
-                {/* Section A: Multipliers */}
-                <div className="mb-6 bg-gray-900/40 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-1 h-full bg-emerald-500/80"></div>
-                  <h3 className="text-lg font-bold text-gray-200 mb-4 flex items-center">
-                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">מכפילים (Multipliers)</span>
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    <StatCard label="מכפיל רווח נוכחי" value={formatValue(fundamentals.trailingPE)} />
-                    <StatCard label="מכפיל רווח עתידי" value={formatValue(fundamentals.forwardPE)} />
-                    <StatCard label="מכפיל תזרים" value={formatValue(fundamentals.priceToCashFlow)} />
-                    <StatCard label="מכפיל PEG" value={formatValue(fundamentals.pegRatio)} />
-                  </div>
+              <div className="w-full mb-20 animate-in slide-in-from-bottom-8 duration-1000" dir="rtl">
+                
+                {/* Bloomberg style Header */}
+                <div className="flex items-center gap-4 mb-8">
+                   <div className="h-px bg-foreground/10 flex-1"></div>
+                   <h2 className="text-xs font-black uppercase tracking-[0.4em] text-foreground/40">Core Financial Metrics</h2>
+                   <div className="h-px bg-foreground/10 flex-1"></div>
                 </div>
 
-                {/* Section B: Margins */}
-                <div className="mb-6 bg-gray-950/60 p-5 rounded-2xl border border-gray-800/40 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-1 h-full bg-blue-500/60"></div>
-                  <h3 className="text-lg font-bold text-gray-200 mb-4">
-                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">שולי רווח ורווחיות (Margins)</span>
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    <StatCard label="שולי רווח גולמי"   value={formatValue(fundamentals.grossMargin, 'percent')} />
-                    <StatCard label="שולי רווח תפעולי" value={formatValue(fundamentals.operatingMargin, 'percent')} />
-                    <StatCard label="שולי רווח נקי"    value={formatValue(fundamentals.profitMargin, 'percent')} />
-                    <StatCard label="שולי תזרים חופשי" value={formatValue(fundamentals.fcfMargin, 'percent')} />
-                    <StatCard label="ROE"               value={formatValue(fundamentals.roe, 'percent')} />
-                  </div>
-                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                   {/* Combined sections into cleaner grid */}
+                   <StatGroup title="Valuation" color="emerald">
+                      <StatItem label="P/E Current" value={formatValue(fundamentals.trailingPE)} />
+                      <StatItem label="Forward P/E" value={formatValue(fundamentals.forwardPE)} />
+                      <StatItem label="PEG Ratio" value={formatValue(fundamentals.pegRatio)} />
+                   </StatGroup>
 
-                {/* Section C: Health */}
-                <div className="mb-6 bg-gray-900/30 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-1 h-full bg-purple-500/60"></div>
-                  <h3 className="text-lg font-bold text-gray-200 mb-4">
-                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">נתוני חברה וחוסן (Health)</span>
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                    <StatCard label="שווי שוק"    value={formatValue(fundamentals.marketCap, 'large')} prefix="$" />
-                    <StatCard label="סך חוב"       value={formatValue(fundamentals.totalDebt, 'large')} prefix="$" />
-                    <StatCard label="מזומנים"      value={formatValue(fundamentals.totalCash, 'large')} prefix="$" />
-                    <StatCard label="בטא (Beta)"   value={formatValue(fundamentals.beta)} />
-                    <StatCard label="אחוז דיבידנד" value={
-                      !fundamentals.dividendYield || fundamentals.dividendYield === 0
-                        ? "החברה לא מחלקת דיבידנד"
-                        : formatValue(fundamentals.dividendYield, 'percent')
-                    } />
-                  </div>
+                   <StatGroup title="Performance" color="blue">
+                      <StatItem label="Gross Margin" value={formatValue(fundamentals.grossMargin, 'percent')} />
+                      <StatItem label="Operating Margin" value={formatValue(fundamentals.operatingMargin, 'percent')} />
+                      <StatItem label="ROE" value={formatValue(fundamentals.roe, 'percent')} />
+                   </StatGroup>
+
+                   <StatGroup title="Capital" color="gold">
+                      <StatItem label="Market Cap" value={formatValue(fundamentals.marketCap, 'large')} />
+                      <StatItem label="Total Debt" value={formatValue(fundamentals.totalDebt, 'large')} />
+                      <StatItem label="Total Cash" value={formatValue(fundamentals.totalCash, 'large')} />
+                   </StatGroup>
                 </div>
               </div>
             )}
 
-            {/* Charts */}
+            {/* Charts Section */}
             {fundamentals && (
-              <div className="w-full px-4 md:px-0 mb-20 animate-in slide-in-from-bottom-6 duration-1000" dir="rtl">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-gray-200 pr-4 border-r-4 border-emerald-500 bg-gray-900/40 py-2 rounded-l-xl shadow-sm font-sans">
-                    Financials &amp; Charts (דוחות פיננסיים)
-                  </h2>
+              <div className="w-full px-4 md:px-0 mb-32 animate-in slide-in-from-bottom-12 duration-1000" dir="rtl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                   <h2 className="text-4xl font-extralight tracking-tighter text-foreground">
+                     Financial <span className="text-accent-gold italic opacity-80">Trajectories</span>
+                   </h2>
 
-                  {/* Annual / Quarterly Toggle */}
-                  <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1 shadow-inner" dir="ltr">
+                   <div className="flex p-1 bg-foreground/5 rounded-2xl border border-foreground/5 backdrop-blur-sm" dir="ltr">
                     <button
                       onClick={() => setPeriod("annual")}
-                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                        period === "annual"
-                          ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
-                          : "text-gray-400 hover:text-gray-200"
+                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all duration-300 ${
+                        period === "annual" ? "bg-foreground text-background shadow-lg" : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
                       Annual
                     </button>
                     <button
                       onClick={() => setPeriod("quarter")}
-                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                        period === "quarter"
-                          ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
-                          : "text-gray-400 hover:text-gray-200"
+                      className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all duration-300 ${
+                        period === "quarter" ? "bg-foreground text-background shadow-lg" : "text-foreground/40 hover:text-foreground/70"
                       }`}
                     >
                       Quarterly
@@ -293,11 +247,41 @@ export default function Home() {
                   </div>
                 </div>
 
-                <FinancialCharts financials={fundamentals.financials || []} period={period} />
+                <div className="bg-card/20 backdrop-blur-md border border-foreground/5 p-6 md:p-10 rounded-[3rem] shadow-2xl">
+                   <FinancialCharts financials={fundamentals.financials || []} period={period} />
+                </div>
               </div>
             )}
           </div>
       </div>
+    </div>
+  );
+}
+
+function StatGroup({ title, color, children }: { title: string, color: string, children: React.ReactNode }) {
+  const colorMap: any = {
+    emerald: "bg-emerald-500",
+    blue: "bg-blue-500",
+    gold: "bg-amber-500"
+  };
+  return (
+    <div className="bg-card/30 backdrop-blur-sm border border-foreground/5 p-6 rounded-[2rem] hover:border-foreground/10 transition-all flex flex-col gap-4">
+       <div className="flex items-center gap-3 mb-2">
+         <div className={`w-1 h-3 ${colorMap[color]} rounded-full opacity-50`}></div>
+         <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/40">{title}</h3>
+       </div>
+       <div className="space-y-4">
+          {children}
+       </div>
+    </div>
+  );
+}
+
+function StatItem({ label, value }: { label: string, value: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+       <span className="text-[9px] font-bold text-foreground/30 uppercase tracking-widest">{label}</span>
+       <span className="text-xl font-extralight tracking-tight text-foreground">{value}</span>
     </div>
   );
 }

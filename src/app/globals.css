@@ -1,26 +1,47 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
+@theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-accent-gold: #D4AF37;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --border-radius-lux: 0.5rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #FAFAFA;
+  --foreground: #050505;
+  --card: #FFFFFF;
+  --card-foreground: #050505;
+  --sidebar: #F5F5F5;
+  --sidebar-foreground: #050505;
+}
+
+.dark {
+  --background: #050505;
+  --foreground: #FAFAFA;
+  --card: #121212;
+  --card-foreground: #FAFAFA;
+  --sidebar: #0A0A0A;
+  --sidebar-foreground: #FAFAFA;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  transition-property: background-color, color;
+  transition-duration: 300ms;
 }
+
+@layer components {
+  .glass {
+    @apply backdrop-blur-md bg-opacity-70;
+  }
+}
+

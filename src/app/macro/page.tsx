@@ -16,8 +16,10 @@ import {
   RefreshCw,
   BarChart3
 } from "lucide-react";
+import { useTheme } from "next-themes";
 
 export default function MacroPage() {
+  const { theme } = useTheme();
   const [data, setData] = useState<MacroData | null>(null);
   const [yieldCurve, setYieldCurve] = useState<YieldCurvePoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,10 +46,10 @@ export default function MacroPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-950 p-12 flex items-center justify-center">
+      <div className="min-h-screen bg-background p-12 flex items-center justify-center transition-colors duration-300">
         <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="w-10 h-10 text-emerald-500 animate-spin" />
-          <p className="text-gray-500 font-mono text-xs uppercase tracking-widest">Synchronizing Macro Data...</p>
+          <RefreshCw className="w-10 h-10 text-foreground/20 animate-spin" />
+          <p className="text-foreground/40 font-mono text-[10px] uppercase tracking-[0.3em] font-bold">Synchronizing Macro Data...</p>
         </div>
       </div>
     );
@@ -55,11 +57,11 @@ export default function MacroPage() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-950 p-12 text-white text-center">
-        <div className="max-w-md mx-auto bg-gray-900 border border-gray-800 p-8 rounded-2xl">
-          <p className="text-emerald-500 font-bold mb-4">API CONNECTION OFFLINE</p>
-          <p className="text-gray-400 mb-8">Failed to establish handshake with FRED clusters. Verify FRED_KEY.</p>
-          <button onClick={fetchData} className="px-6 py-2 bg-emerald-600 rounded-lg text-white font-bold hover:bg-emerald-500 transition-colors">RETRY HANDSHAKE</button>
+      <div className="min-h-screen bg-background p-12 text-foreground text-center transition-colors duration-300">
+        <div className="max-w-md mx-auto bg-card/40 backdrop-blur-xl border border-foreground/5 p-12 rounded-[2.5rem] shadow-2xl">
+          <p className="text-rose-500 font-black text-[10px] uppercase tracking-[0.2em] mb-4">API Offline</p>
+          <p className="text-foreground/40 mb-8 font-medium text-sm leading-relaxed uppercase tracking-wider">Failed to establish handshake with FRED clusters. Verify FRED_KEY.</p>
+          <button onClick={fetchData} className="px-8 py-3 bg-foreground text-background rounded-xl font-black text-[10px] uppercase tracking-[0.2em] hover:opacity-90 transition-all active:scale-95 shadow-lg shadow-black/10">Retry Connection</button>
         </div>
       </div>
     );
@@ -72,70 +74,70 @@ export default function MacroPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-950 p-8 md:p-12 text-white font-sans">
-      <header className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+    <div className="min-h-screen bg-background p-6 md:p-12 text-foreground transition-colors duration-300">
+      <header className="mb-16 flex flex-col lg:flex-row lg:items-end justify-between gap-8 mt-16 md:mt-0">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-emerald-500/20 p-2 rounded-lg">
-              <Globe className="w-6 h-6 text-emerald-500" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-foreground/5 p-2 rounded-xl">
+              <Globe className="w-6 h-6 text-foreground/40" />
             </div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em]">Economic Intelligence</span>
+            <span className="text-[10px] font-black text-foreground/30 uppercase tracking-[0.4em]">Economic Intelligence</span>
           </div>
-          <h1 className="text-5xl font-black tracking-tighter text-white">
-            Macroeconomics <span className="text-emerald-500">Terminal</span>
+          <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none">
+            Macroeconomics <span className="text-foreground/30 italic">Terminal</span>
           </h1>
-          <p className="text-gray-500 mt-2 font-mono text-xs uppercase tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Real-time FRED Data Synchronization Online
+          <p className="text-foreground/40 mt-4 font-mono text-[10px] uppercase tracking-[0.2em] flex items-center gap-2 font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            FRED Stream Synchronized
           </p>
         </div>
         
         <button 
           onClick={fetchData}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg hover:bg-gray-800 transition-colors text-xs font-bold text-gray-400 uppercase tracking-widest"
+          className="flex items-center gap-2 px-6 py-3 bg-foreground/5 border border-foreground/5 rounded-xl hover:bg-foreground/10 transition-colors text-[10px] font-black text-foreground/40 uppercase tracking-[0.2em]"
         >
           <RefreshCw className="w-3.5 h-3.5" />
-          Refresh Data
+          Refresh Uplink
         </button>
       </header>
       
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-12">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-16">
         {/* Summary Table */}
         <section className="xl:col-span-2">
-          <div className="bg-gray-900/50 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-sm h-full">
-            <div className="p-6 border-b border-gray-800 bg-gray-900/80">
-              <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                <ArrowRightLeft className="w-4 h-4 text-emerald-500" />
-                Indicator Summary (Current vs Previous)
+          <div className="bg-card/30 border border-foreground/5 rounded-[2.5rem] overflow-hidden shadow-2xl backdrop-blur-xl h-full pb-6">
+            <div className="p-8 border-b border-foreground/5">
+              <h2 className="text-[10px] font-black text-foreground/30 uppercase tracking-[0.4em] flex items-center gap-3">
+                <ArrowRightLeft className="w-4 h-4 text-foreground/40" />
+                Momentum Matrix
               </h2>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full text-left font-mono text-sm">
+              <table className="w-full text-left font-mono">
                 <thead>
-                  <tr className="border-b border-gray-800 bg-gray-950/40 text-gray-500 uppercase text-[10px] tracking-widest">
-                    <th className="px-8 py-4 font-bold">Indicator</th>
-                    <th className="px-8 py-4 font-bold">Latest</th>
-                    <th className="px-8 py-4 font-bold">Previous</th>
-                    <th className="px-8 py-4 font-bold text-right">Momentum</th>
+                  <tr className="border-b border-foreground/5 text-foreground/20 uppercase text-[9px] font-black tracking-[0.3em]">
+                    <th className="px-8 py-6">Indicator</th>
+                    <th className="px-8 py-6">Latest</th>
+                    <th className="px-8 py-6">Prev</th>
+                    <th className="px-8 py-6 text-right">Delta</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-800">
+                <tbody className="divide-y divide-foreground/5">
                   {indicators.map((ind) => {
                     const item = (data as any)[ind.key];
                     const sign = item.change >= 0 ? '+' : '';
-                    const momentumColor = item.change > 0 ? 'text-emerald-400' : item.change < 0 ? 'text-rose-400' : 'text-gray-400';
+                    const momentumColor = item.change > 0 ? 'text-emerald-500' : item.change < 0 ? 'text-rose-500' : 'text-foreground/40';
                     
                     return (
-                      <tr key={ind.key} className="hover:bg-gray-800/30 transition-colors group">
-                        <td className="px-8 py-5">
+                      <tr key={ind.key} className="hover:bg-foreground/5 transition-colors group">
+                        <td className="px-8 py-6">
                           <div className="flex flex-col">
-                            <span className="font-bold text-gray-200 group-hover:text-emerald-400 transition-colors">{ind.label}</span>
-                            <span className="text-[10px] text-gray-500 uppercase tracking-tighter opacity-70">{ind.sub}</span>
+                            <span className="font-extralight text-xl tracking-tight text-foreground group-hover:text-emerald-500/80 transition-colors leading-none">{ind.label}</span>
+                            <span className="text-[9px] text-foreground/20 uppercase tracking-[0.2em] font-black mt-2 opacity-70">{ind.sub}</span>
                           </div>
                         </td>
-                        <td className="px-8 py-5 text-lg font-black">{item.current.toFixed(2)}{ind.suffix}</td>
-                        <td className="px-8 py-5 text-gray-500">{item.previous.toFixed(2)}{ind.suffix}</td>
-                        <td className={`px-8 py-5 text-right font-bold ${momentumColor}`}>
+                        <td className="px-8 py-6 text-2xl font-extralight tracking-tighter">{item.current.toFixed(2)}{ind.suffix}</td>
+                        <td className="px-8 py-6 text-foreground/30 font-bold">{item.previous.toFixed(2)}{ind.suffix}</td>
+                        <td className={`px-8 py-6 text-right font-black text-xs uppercase tracking-widest ${momentumColor}`}>
                           <div className="flex items-center justify-end gap-2">
                             {item.change > 0 ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
                             {sign}{item.change.toFixed(2)}
@@ -150,27 +152,29 @@ export default function MacroPage() {
           </div>
         </section>
 
-        {/* Yield Curve Mini Preview / Header */}
-        <section className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="bg-blue-500/20 p-2 rounded-lg">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
+        {/* Yield Curve Mini Analytics */}
+        <section className="bg-card/40 border border-foreground/5 rounded-[2.5rem] p-10 flex flex-col justify-center backdrop-blur-xl shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-foreground/5 rounded-full filter blur-[80px] -mr-16 -mt-16 group-hover:bg-foreground/10 transition-colors duration-700 pointer-events-none"></div>
+            
+            <div className="flex items-center gap-3 mb-8 relative z-10">
+              <div className="bg-foreground/5 p-2 rounded-xl">
+                <BarChart3 className="w-5 h-5 text-foreground/40" />
               </div>
-              <h3 className="text-lg font-black uppercase tracking-tight">Yield Curve Analysis</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-foreground/40">Yield Curve Index</h3>
             </div>
-            <p className="text-gray-400 text-sm leading-relaxed mb-6">
-              The relation between interest rates and time to maturity. A normal curve slopes upward, while an <span className="text-rose-400 font-bold italic">inverted curve</span> often signals impending recession.
+            <p className="text-foreground/40 text-sm font-medium leading-relaxed mb-8 relative z-10">
+              Maturity spreads indicate structural health. <span className="text-rose-500 font-black italic">Inversions</span> signal cyclical contraction.
             </p>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
-                    <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Spread 10Y-2Y</span>
-                    <span className={`text-xl font-black ${(yieldCurve[4]?.yield - yieldCurve[2]?.yield) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+                <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 backdrop-blur-sm group/card hover:bg-foreground/10 transition-all duration-300">
+                    <span className="text-[8px] text-foreground/30 uppercase font-black block mb-2 tracking-[0.2em]">Spread 10Y-2Y</span>
+                    <span className={`text-3xl font-extralight tracking-tighter ${(yieldCurve[4]?.yield - yieldCurve[2]?.yield) < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                         {yieldCurve.length > 4 ? (yieldCurve[4].yield - yieldCurve[2].yield).toFixed(2) : '0.00'}%
                     </span>
                 </div>
-                <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
-                    <span className="text-[10px] text-gray-500 uppercase font-bold block mb-1">Spread 10Y-3M</span>
-                    <span className={`text-xl font-black ${(yieldCurve[4]?.yield - yieldCurve[0]?.yield) < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                <div className="bg-foreground/5 p-6 rounded-2xl border border-foreground/5 backdrop-blur-sm group/card hover:bg-foreground/10 transition-all duration-300">
+                    <span className="text-[8px] text-foreground/30 uppercase font-black block mb-2 tracking-[0.2em]">Spread 10Y-3M</span>
+                    <span className={`text-3xl font-extralight tracking-tighter ${(yieldCurve[4]?.yield - yieldCurve[0]?.yield) < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                         {yieldCurve.length > 4 ? (yieldCurve[4].yield - yieldCurve[0].yield).toFixed(2) : '0.00'}%
                     </span>
                 </div>
@@ -179,124 +183,138 @@ export default function MacroPage() {
       </div>
 
       {/* Main Charts Section */}
-      <div className="space-y-8 mb-20">
+      <div className="space-y-12 mb-32">
         {/* Yield Curve Chart - Full Width */}
-        <div className="bg-gray-900 border border-gray-800 p-8 rounded-3xl shadow-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full filter blur-3xl -mr-20 -mt-20 group-hover:bg-blue-500/10 transition-colors duration-500 pointer-events-none"></div>
+        <div className="bg-card/30 border border-foreground/5 p-8 md:p-12 rounded-[3.5rem] shadow-3xl relative overflow-hidden group backdrop-blur-xl">
+            <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full filter blur-[120px] -mr-32 -mt-32 group-hover:bg-emerald-500/10 transition-colors duration-700 pointer-events-none"></div>
             
-            <div className="flex justify-between items-start mb-8 relative z-10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-12 relative z-10 gap-4">
                 <div>
-                  <h3 className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">U.S. Treasury Yield Curve</h3>
-                  <p className="text-[10px] text-gray-500 font-mono uppercase tracking-[0.3em] mt-1">Real-time Multi-Maturity Snapshot</p>
+                  <h3 className="text-4xl font-extralight tracking-tighter text-foreground leading-none">Yield Curve <span className="italic text-foreground/40">Continuum</span></h3>
+                  <p className="text-[9px] text-foreground/30 font-black uppercase tracking-[0.4em] mt-4">Multi-Maturity Capital Mapping</p>
                 </div>
-                <div className="bg-blue-500/10 text-blue-400 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-500/20">
-                    Live Fed Series
+                <div className="bg-foreground/5 text-foreground/40 px-5 py-2 rounded-full text-[9px] font-black uppercase tracking-[0.2em] border border-foreground/5">
+                    Live_Network_Node
                 </div>
             </div>
             
-            <div className="h-[400px] w-full mt-4">
+            <div className="h-[450px] w-full mt-4" dir="ltr">
                 <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={yieldCurve}>
                         <defs>
                             <linearGradient id="colorYield" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            <stop offset="5%" stopColor={theme === 'dark' ? '#10b981' : '#059669'} stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor={theme === 'dark' ? '#10b981' : '#059669'} stopOpacity={0}/>
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} opacity={0.5} />
+                        <CartesianGrid strokeDasharray="3 3" stroke="currentColor" vertical={false} opacity={0.05} />
                         <XAxis 
                             dataKey="maturity" 
-                            stroke="#4b5563" 
-                            fontSize={12} 
+                            stroke="currentColor" 
+                            fontSize={10} 
                             tickLine={false} 
                             axisLine={false}
-                            padding={{ left: 20, right: 20 }}
+                            className="text-foreground/30 font-bold uppercase tracking-widest"
+                            padding={{ left: 30, right: 30 }}
                         />
                         <YAxis 
-                            stroke="#4b5563" 
-                            fontSize={12} 
+                            stroke="currentColor" 
+                            fontSize={10} 
                             tickLine={false} 
                             axisLine={false}
+                            className="text-foreground/30 font-bold"
                             tickFormatter={(v) => v.toFixed(1) + '%'}
                             domain={['auto', 'auto']}
                         />
                         <Tooltip 
-                            contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '12px', fontSize: '14px', padding: '12px' }}
-                            itemStyle={{ color: '#60a5fa', fontWeight: 'black' }}
-                            labelStyle={{ color: '#9ca3af', marginBottom: '8px', fontWeight: 'bold' }}
-                            formatter={(value: any) => [`${value.toFixed(3)}%`, "Yield"]}
+                            contentStyle={{ 
+                              backgroundColor: 'rgba(var(--background), 0.8)', 
+                              backdropFilter: 'blur(12px)',
+                              border: '1px solid rgba(var(--foreground), 0.05)', 
+                              borderRadius: '24px', 
+                              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
+                            }}
+                            itemStyle={{ color: '#10b981', fontWeight: '900', fontSize: '18px' }}
+                            labelStyle={{ color: 'rgba(var(--foreground), 0.3)', marginBottom: '8px', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.2em', fontSize: '10px' }}
+                            formatter={(value: any) => [`${value.toFixed(3)}%`, "YIELD"]}
                         />
                         <Area 
                             type="monotone" 
                             dataKey="yield" 
-                            stroke="#3b82f6" 
-                            strokeWidth={4} 
+                            stroke="#10b981" 
+                            strokeWidth={3} 
                             fillOpacity={1} 
                             fill="url(#colorYield)"
-                            dot={{ r: 6, fill: '#3b82f6', strokeWidth: 0 }}
-                            activeDot={{ r: 8, stroke: '#111827', strokeWidth: 2, fill: '#60a5fa' }}
+                            dot={{ r: 4, fill: '#10b981', strokeWidth: 0 }}
+                            activeDot={{ r: 8, stroke: 'currentColor', strokeWidth: 4, fill: '#10b981' }}
                         />
                     </AreaChart>
                 </ResponsiveContainer>
             </div>
             
-            <div className="grid grid-cols-7 gap-px bg-gray-800 border border-gray-800 rounded-xl mt-8 overflow-hidden font-mono text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-px bg-foreground/10 border border-foreground/10 rounded-[2rem] mt-12 overflow-hidden relative z-10 shadow-lg">
                 {yieldCurve.map((point) => (
-                    <div key={point.maturity} className="bg-gray-900 p-4 hover:bg-gray-800 transition-colors">
-                        <span className="text-[10px] text-gray-500 uppercase font-black block mb-1">{point.maturity}</span>
-                        <span className="text-lg font-bold text-white tracking-widest">{point.yield.toFixed(2)}%</span>
+                    <div key={point.maturity} className="bg-card/40 p-6 hover:bg-card/60 transition-all duration-300 backdrop-blur-sm flex flex-col items-center group/item text-center">
+                        <span className="text-[8px] text-foreground/20 uppercase font-black block mb-2 tracking-[0.2em] group-hover/item:text-emerald-500/50 transition-colors">{point.maturity}</span>
+                        <span className="text-xl font-extralight tracking-tighter text-foreground">{point.yield.toFixed(2)}%</span>
                     </div>
                 ))}
             </div>
         </div>
 
-        {/* Other Trends */}
+        {/* Global Economic Indices */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {indicators.map((ind) => {
             const item = (data as any)[ind.key];
             return (
-                <div key={ind.key} className="bg-gray-900/60 border border-gray-800 p-6 rounded-3xl shadow-xl hover:border-gray-700 transition-all group relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-3xl -mr-10 -mt-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+                <div key={ind.key} className="bg-card/30 backdrop-blur-md border border-foreground/5 p-10 rounded-[3rem] shadow-2xl hover:border-foreground/10 transition-all duration-500 group relative overflow-hidden flex flex-col">
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-foreground/5 rounded-full filter blur-[80px] -mr-16 -mt-16 group-hover:bg-foreground/10 transition-all duration-700 pointer-events-none"></div>
                     
-                    <div className="flex justify-between items-start mb-6">
-                        <div>
-                        <h3 className="text-xl font-bold text-white group-hover:text-emerald-400 transition-colors">{ind.label}</h3>
-                        <p className="text-[10px] text-gray-500 font-mono uppercase tracking-[0.2em]">{ind.sub} (5-Year Trend)</p>
-                        </div>
-                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${item.change >= 0 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                        {item.change >= 0 ? 'Increasing' : 'Decreasing'}
+                    <div className="flex flex-col gap-6 mb-10 relative z-10">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h3 className="text-3xl font-extralight tracking-tighter text-foreground leading-none">{ind.label}</h3>
+                            <p className="text-[9px] text-foreground/30 font-black uppercase tracking-[0.2em] mt-3">{ind.sub} (5Y Cycle)</p>
+                          </div>
+                          <div className={`px-4 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${item.change >= 0 ? 'bg-emerald-500/5 text-emerald-500 border-emerald-500/10' : 'bg-rose-500/5 text-rose-500 border-rose-500/10'}`}>
+                            {item.change >= 0 ? 'Expansion' : 'Contraction'}
+                          </div>
                         </div>
                     </div>
                     
-                    <div className="h-48 mt-4">
+                    <div className="h-48 mt-auto relative z-10" dir="ltr">
                         <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={item.history}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" vertical={false} opacity={0.3} />
+                            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" vertical={false} opacity={0.03} />
                             <XAxis 
                                 dataKey="date" 
-                                stroke="#4b5563" 
-                                fontSize={10} 
+                                stroke="currentColor" 
+                                fontSize={8} 
+                                className="text-foreground/20 font-bold uppercase tracking-widest"
                                 tickLine={false} 
                                 axisLine={false}
                                 tickCount={4}
-                                tickFormatter={(d) => {
-                                    const [y, m] = d.split('-');
-                                    return `${y.substring(2)}-${m}`;
-                                }}
+                                tickFormatter={(d) => d.split('-')[0].substring(2)}
                             />
                             <YAxis 
-                                stroke="#4b5563" 
-                                fontSize={10} 
+                                stroke="currentColor" 
+                                fontSize={8} 
+                                className="text-foreground/20 font-bold"
                                 tickLine={false} 
                                 axisLine={false}
-                                tickFormatter={(v) => v.toFixed(1) + (ind.suffix || '')}
+                                tickFormatter={(v) => v.toFixed(0) + (ind.suffix || '')}
                                 domain={['auto', 'auto']}
-                                width={35}
+                                width={25}
                             />
                             <Tooltip 
-                                contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: '8px', fontSize: '11px' }}
-                                itemStyle={{ color: ind.color, fontWeight: 'bold' }}
-                                labelStyle={{ color: '#9ca3af', marginBottom: '4px' }}
+                                contentStyle={{ 
+                                  backgroundColor: 'rgba(var(--background), 0.8)', 
+                                  backdropFilter: 'blur(12px)',
+                                  border: '1px solid rgba(var(--foreground), 0.05)', 
+                                  borderRadius: '20px'
+                                }}
+                                itemStyle={{ color: ind.color, fontWeight: '900', fontSize: '14px' }}
+                                labelStyle={{ color: 'rgba(var(--foreground), 0.3)', marginBottom: '4px', fontSize: '9px', fontWeight: '900', letterSpacing: '0.1em' }}
                             />
                             <Line 
                                 type="monotone" 
@@ -304,7 +322,7 @@ export default function MacroPage() {
                                 stroke={ind.color} 
                                 strokeWidth={3} 
                                 dot={false}
-                                activeDot={{ r: 5, stroke: '#111827', strokeWidth: 2 }}
+                                activeDot={{ r: 6, stroke: 'currentColor', strokeWidth: 3, fill: ind.color }}
                             />
                         </LineChart>
                         </ResponsiveContainer>

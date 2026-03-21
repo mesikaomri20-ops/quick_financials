@@ -120,230 +120,240 @@ export default function ValuationPage() {
   }, [revenue, targetGrowth, targetMargin, peLow, peMid, peHigh, shares, marketCap]);
 
   return (
-    <div className="min-h-screen bg-gray-950 p-6 md:p-12 text-white font-sans lg:ml-16">
+    <div className="min-h-screen bg-background p-6 md:p-12 text-foreground transition-colors duration-300">
       {/* Search Header */}
-      <header className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <header className="mb-16 flex flex-col lg:flex-row lg:items-end justify-between gap-8 mt-16 md:mt-0">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-emerald-500/20 p-2 rounded-lg">
-              <Dna className="w-6 h-6 text-emerald-500" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="bg-foreground/5 p-2 rounded-xl">
+              <Dna className="w-6 h-6 text-foreground/40" />
             </div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.3em]">Institutional Terminal</span>
+            <span className="text-[10px] font-black text-foreground/30 uppercase tracking-[0.4em]">Institutional Terminal</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tighter text-white uppercase italic">
-            Valuation <span className="text-emerald-500">Command Center</span>
+          <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none">
+            Valuation <span className="text-accent-gold italic opacity-80">Terminal</span>
           </h1>
         </div>
 
-        <form onSubmit={handleSearch} className="relative group">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 group-hover:text-emerald-500 transition-colors" />
+        <form onSubmit={handleSearch} className="relative group w-full lg:w-auto">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/20 group-hover:text-emerald-500 transition-colors" />
             <input 
                 type="text" 
-                placeholder="Ex: AAPL, NVDA, GOOGL..." 
+                placeholder="EX: AAPL, NVDA, GOOGL..." 
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                className="bg-gray-900/80 border border-gray-800 rounded-2xl py-3 pl-12 pr-6 outline-none focus:border-emerald-500/50 focus:ring-4 focus:ring-emerald-500/10 transition-all font-mono text-sm w-full md:w-64"
+                className="bg-card/50 border border-foreground/5 rounded-2xl py-3.5 pl-12 pr-6 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono text-xs font-bold w-full lg:w-64 placeholder:opacity-30"
             />
         </form>
       </header>
 
       {/* Tab Switcher */}
-      <div className="flex p-1.5 bg-gray-900 border border-gray-800 rounded-2xl mb-12 w-fit mx-auto md:mx-0">
+      <div className="flex p-1.5 bg-foreground/5 border border-foreground/5 rounded-[2rem] mb-16 w-fit mx-auto lg:mx-0 backdrop-blur-sm">
           <button 
             onClick={() => setActiveTab("dcf")}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${activeTab === 'dcf' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === 'dcf' ? 'bg-foreground text-background shadow-lg' : 'text-foreground/30 hover:text-foreground/60'}`}
           >
             <BarChart3 className="w-4 h-4" />
-            Exit Multiple DCF
+            Intrinsic_DCF
           </button>
           <button 
             onClick={() => setActiveTab("3y-target")}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold uppercase tracking-widest transition-all ${activeTab === '3y-target' ? 'bg-emerald-600 text-white shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+            className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === '3y-target' ? 'bg-foreground text-background shadow-lg' : 'text-foreground/30 hover:text-foreground/60'}`}
           >
             <Target className="w-4 h-4" />
-            3Y Growth Target
+            Growth_Target
           </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-12">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-12 mb-32">
         {/* Input Column */}
-        <div className="xl:col-span-4 space-y-6">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-[0.2em] mb-4">Core Model Inputs</h2>
+        <div className="xl:col-span-4 space-y-8">
+            <h2 className="text-[10px] font-black text-foreground/30 uppercase tracking-[0.4em] mb-4">Core Model Parameters</h2>
             
-            <div className="space-y-4">
+            <div className="space-y-6">
                 {activeTab === 'dcf' ? (
                     <>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current FCF (M$)</label>
-                            <input type="number" value={fcf} onChange={(e) => setFcf(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Current FCF (M$)</label>
+                            <input type="number" value={fcf} onChange={(e) => setFcf(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">FCF Growth Rate (%)</label>
-                            <input type="number" value={growth} onChange={(e) => setGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Growth Velocity (%)</label>
+                            <input type="number" value={growth} onChange={(e) => setGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Exit Multiple (P/FCF)</label>
-                            <input type="number" value={exitMultiple} onChange={(e) => setExitMultiple(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Exit Mult (P/FCF)</label>
+                            <input type="number" value={exitMultiple} onChange={(e) => setExitMultiple(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all text-center">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">WACC (%)</label>
-                            <input type="number" value={wacc} onChange={(e) => setWacc(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm text-center">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Capital Cost (WACC %)</label>
+                            <input type="number" value={wacc} onChange={(e) => setWacc(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                         </div>
                     </>
                 ) : (
                     <>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current Revenue (M$)</label>
-                            <input type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Gross Revenue (M$)</label>
+                            <input type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">3Y Rev Growth (%)</label>
-                            <input type="number" value={targetGrowth} onChange={(e) => setTargetGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">CAGR Target (%)</label>
+                            <input type="number" value={targetGrowth} onChange={(e) => setTargetGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Target Net Margin (%)</label>
-                            <input type="number" value={targetMargin} onChange={(e) => setTargetMargin(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                            <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Op Margin (%)</label>
+                            <input type="number" value={targetMargin} onChange={(e) => setTargetMargin(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
 
                         {/* Triple P/E Inputs */}
-                        <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-gray-900/40 border border-gray-800 p-4 rounded-xl text-center hover:border-emerald-500/30 transition-all">
-                                <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1 block">Bear P/E</label>
-                                <input type="number" value={peLow} onChange={(e) => setPeLow(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-card/30 border border-foreground/5 p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
+                                <label className="text-[8px] font-black text-foreground/20 uppercase tracking-[0.2em] mb-2 block">Bear_PE</label>
+                                <input type="number" value={peLow} onChange={(e) => setPeLow(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
-                            <div className="bg-gray-900/40 border border-emerald-500/30 p-4 rounded-xl text-center shadow-lg shadow-emerald-500/5">
-                                <label className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1 block">Base P/E</label>
-                                <input type="number" value={peMid} onChange={(e) => setPeMid(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                            <div className="bg-foreground/5 border border-emerald-500/20 p-4 rounded-[1.5rem] text-center shadow-xl shadow-emerald-500/5">
+                                <label className="text-[8px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-2 block font-bold">Base_PE</label>
+                                <input type="number" value={peMid} onChange={(e) => setPeMid(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
-                            <div className="bg-gray-900/40 border border-gray-800 p-4 rounded-xl text-center hover:border-emerald-500/30 transition-all">
-                                <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1 block">Bull P/E</label>
-                                <input type="number" value={peHigh} onChange={(e) => setPeHigh(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                            <div className="bg-card/30 border border-foreground/5 p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
+                                <label className="text-[8px] font-black text-foreground/20 uppercase tracking-[0.2em] mb-2 block">Bull_PE</label>
+                                <input type="number" value={peHigh} onChange={(e) => setPeHigh(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
                         </div>
                     </>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center group hover:border-emerald-500/30 transition-all">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">Current Price</label>
-                        <input type="number" value={currentPrice} onChange={(e) => setCurrentPrice(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div className="bg-card/30 border border-foreground/5 p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
+                        <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-2 block group-hover:text-emerald-500/50 transition-colors">Spot Price</label>
+                        <input type="number" value={currentPrice} onChange={(e) => setCurrentPrice(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                     </div>
-                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center group hover:border-emerald-500/30 transition-all">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">Shares (M)</label>
-                        <input type="number" value={shares} onChange={(e) => setShares(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" placeholder="Shares" />
+                    <div className="bg-card/30 border border-foreground/5 p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
+                        <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-2 block group-hover:text-emerald-500/50 transition-colors">Floating Shares</label>
+                        <input type="number" value={shares} onChange={(e) => setShares(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                     </div>
                 </div>
 
-                <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current Market Cap (M$)</label>
-                    <input type="number" value={marketCap} onChange={(e) => setMarketCap(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" placeholder="Market Cap" />
+                <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                    <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Cap Matrix (M$)</label>
+                    <input type="number" value={marketCap} onChange={(e) => setMarketCap(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                 </div>
             </div>
         </div>
 
         {/* Results Column */}
-        <div className="xl:col-span-8 space-y-8">
+        <div className="xl:col-span-8 space-y-12">
             {activeTab === 'dcf' ? (
                 /* DCF RESULTS UI */
                 <>
-                    <div className="bg-emerald-900/10 border border-emerald-500/20 p-10 rounded-[2.5rem] relative overflow-hidden group shadow-2xl">
-                        <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/5 rounded-full filter blur-3xl -mr-32 -mt-32 pointer-events-none"></div>
-                        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+                    <div className="bg-card/40 backdrop-blur-2xl border border-foreground/5 p-10 md:p-16 rounded-[3.5rem] relative overflow-hidden group shadow-3xl">
+                        <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full filter blur-[120px] -mr-32 -mt-32 pointer-events-none group-hover:bg-emerald-500/10 transition-colors duration-1000"></div>
+                        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-12">
                             <div>
-                                <span className="text-xs font-bold text-emerald-500/60 uppercase tracking-widest mb-3 block">Intrinsic Fair Value</span>
-                                <div className="flex items-baseline gap-3">
-                                    <span className="text-8xl font-black text-white tracking-tighter">${dcfResults.fairValuePerShare.toFixed(2)}</span>
-                                    <span className="text-lg font-bold text-gray-500 uppercase tracking-widest">USD</span>
+                                <span className="text-[10px] font-black text-foreground/20 uppercase tracking-[0.4em] mb-4 block">Calculated Fair Value</span>
+                                <div className="flex items-baseline gap-4">
+                                    <span className="text-9xl font-extralight text-foreground tracking-tighter leading-none">${dcfResults.fairValuePerShare.toFixed(2)}</span>
+                                    <span className="text-xl font-bold text-foreground/20 uppercase tracking-widest">USD</span>
                                 </div>
                             </div>
-                            <div className={`p-8 rounded-3xl border ${dcfResults.marginOfSafety > 0 ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'} flex flex-col items-center min-w-[180px]`}>
-                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Margin of Safety</span>
-                                <span className={`text-4xl font-black ${dcfResults.marginOfSafety > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{dcfResults.marginOfSafety.toFixed(1)}%</span>
+                            <div className={`p-10 rounded-[2.5rem] border ${dcfResults.marginOfSafety > 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'} flex flex-col items-center min-w-[220px] backdrop-blur-md shadow-xl`}>
+                                <span className="text-[9px] font-black text-foreground/30 uppercase tracking-[0.3em] mb-2">Safety_Margin</span>
+                                <span className={`text-6xl font-extralight tracking-tighter ${dcfResults.marginOfSafety > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{dcfResults.marginOfSafety.toFixed(1)}%</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="overflow-hidden border border-gray-800 rounded-3xl bg-gray-900/20">
-                        <table className="w-full text-left font-mono">
-                            <thead>
-                                <tr className="bg-gray-900/80 border-b border-gray-800 text-[10px] text-gray-500 uppercase tracking-[0.2em]">
-                                    <th className="px-8 py-5">Projection Year</th>
-                                    <th className="px-8 py-5">Forecast FCF</th>
-                                    <th className="px-8 py-5 text-right">Discounted PV</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-800/50">
-                                {dcfResults.projections.map((p) => (
-                                    <tr key={p.year} className="hover:bg-emerald-500/5 transition-colors">
-                                        <td className="px-8 py-5 text-sm text-gray-400 font-bold">Phase 1 - Year {p.year}</td>
-                                        <td className="px-8 py-5 text-lg font-black text-gray-200">${p.fcf.toFixed(0)}M</td>
-                                        <td className="px-8 py-5 text-lg font-black text-emerald-500 text-right">${p.pv.toFixed(0)}M</td>
-                                    </tr>
-                                ))}
-                                <tr className="bg-emerald-500/5">
-                                    <td className="px-8 py-6 font-black text-emerald-500 uppercase text-xs">Terminal Value (Multiple)</td>
-                                    <td className="px-8 py-6 text-gray-500 text-xs font-bold">Multiple: {exitMultiple}x</td>
-                                    <td className="px-8 py-6 text-2xl font-black text-emerald-500 text-right">${dcfResults.pvOfTerminalValue.toFixed(0)}M</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div className="overflow-hidden border border-foreground/5 rounded-[3rem] bg-card/20 backdrop-blur-sm shadow-2xl">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left font-mono">
+                              <thead>
+                                  <tr className="bg-foreground/5 text-[9px] text-foreground/20 uppercase font-black tracking-[0.4em]">
+                                      <th className="px-10 py-6">Node_Year</th>
+                                      <th className="px-10 py-6">FCF_Projection</th>
+                                      <th className="px-10 py-6 text-right">Present_Value</th>
+                                  </tr>
+                              </thead>
+                              <tbody className="divide-y divide-foreground/5">
+                                  {dcfResults.projections.map((p) => (
+                                      <tr key={p.year} className="hover:bg-foreground/5 transition-all duration-300">
+                                          <td className="px-10 py-6">
+                                            <div className="flex items-center gap-3">
+                                              <div className="w-1 h-3 bg-foreground/10 rounded-full"></div>
+                                              <span className="text-xs text-foreground/40 font-black uppercase tracking-widest">Phase_0{p.year}</span>
+                                            </div>
+                                          </td>
+                                          <td className="px-10 py-6 text-2xl font-extralight tracking-tighter text-foreground">${p.fcf.toFixed(0)}M</td>
+                                          <td className="px-10 py-6 text-2xl font-extralight tracking-tighter text-emerald-500 text-right">${p.pv.toFixed(0)}M</td>
+                                      </tr>
+                                  ))}
+                                  <tr className="bg-foreground/5">
+                                      <td className="px-10 py-8 font-black text-foreground/40 uppercase text-[10px] tracking-[0.3em]">Terminal Value Multiple</td>
+                                      <td className="px-10 py-8 text-foreground/20 text-[10px] font-black uppercase tracking-widest">Exit: {exitMultiple}x</td>
+                                      <td className="px-10 py-8 text-4xl font-extralight tracking-tighter text-emerald-500 text-right leading-none">${dcfResults.pvOfTerminalValue.toFixed(0)}M</td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                        </div>
                     </div>
                 </>
             ) : (
                 /* 3Y TARGET RESULTS UI */
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                         {['Pessimistic', 'Neutral', 'Optimistic'].map((scenario, i) => {
                             const pe = i === 0 ? peLow : i === 1 ? peMid : peHigh;
                             const upside = targetResults.upsides[i];
-                            const color = scenario === 'Pessimistic' ? 'rose' : scenario === 'Neutral' ? 'emerald' : 'blue';
-                            const colorHex = scenario === 'Pessimistic' ? '#fb7185' : scenario === 'Neutral' ? '#10b981' : '#3b82f6';
+                            const colorClass = scenario === 'Pessimistic' ? 'text-rose-500' : scenario === 'Neutral' ? 'text-emerald-500' : 'text-blue-500';
+                            const borderClass = scenario === 'Pessimistic' ? 'group-hover:border-rose-500/20' : scenario === 'Neutral' ? 'group-hover:border-emerald-500/20' : 'group-hover:border-blue-500/20';
                             
                             return (
-                                <div key={scenario} className={`bg-gray-900/60 border border-gray-800 p-8 rounded-[2rem] hover:border-${color}-500/30 transition-all group`}>
-                                    <span className="text-[10px] font-black text-gray-600 uppercase tracking-[0.3em] mb-4 block group-hover:text-white transition-colors">{scenario} Target</span>
-                                    <div className="flex items-baseline gap-1 mb-6">
-                                        <span className={`text-4xl font-black text-white`}>${targetResults.prices[i].toFixed(2)}</span>
-                                        <span className="text-[10px] text-gray-600 font-bold">USD</span>
+                                <div key={scenario} className={`bg-card/30 backdrop-blur-md border border-foreground/5 p-10 rounded-[3rem] shadow-2xl transition-all duration-500 group relative overflow-hidden flex flex-col ${borderClass}`}>
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-foreground/5 rounded-full filter blur-[60px] -mr-16 -mt-16 group-hover:bg-foreground/10 transition-all duration-700 pointer-events-none"></div>
+                                    
+                                    <span className="text-[10px] font-black text-foreground/20 uppercase tracking-[0.4em] mb-6 block z-10">{scenario}</span>
+                                    <div className="flex items-baseline gap-2 mb-8 z-10">
+                                        <span className={`text-5xl font-extralight tracking-tighter text-foreground`}>${targetResults.prices[i].toFixed(2)}</span>
+                                        <span className="text-[10px] text-foreground/20 font-black uppercase tracking-widest">USD</span>
                                     </div>
-                                    <div className={`flex items-center gap-2 p-3 rounded-xl border ${upside > 0 ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500' : 'bg-rose-500/5 border-rose-500/20 text-rose-500'}`}>
-                                        {upside > 0 ? <TrendingUp className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                                        <span className="text-sm font-black whitespace-nowrap">{upside > 0 ? '+' : ''}{upside.toFixed(1)}% Upside</span>
+                                    <div className={`flex items-center gap-3 p-4 rounded-2xl border mt-auto z-10 ${upside > 0 ? 'bg-emerald-500/5 border-emerald-500/10 text-emerald-500' : 'bg-rose-500/5 border-rose-500/10 text-rose-500'}`}>
+                                        {upside > 0 ? <TrendingUp className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                                        <span className="text-xs font-black uppercase tracking-widest whitespace-nowrap">{upside > 0 ? '+' : ''}{upside.toFixed(1)}% Yield</span>
                                     </div>
-                                    <div className="mt-6 flex justify-between items-center text-[10px] text-gray-500 font-mono">
-                                        <span>Target P/E:</span>
-                                        <span className="font-bold text-white uppercase tracking-widest">{pe}x</span>
+                                    <div className="mt-8 pt-8 border-t border-foreground/5 flex justify-between items-center text-[9px] text-foreground/30 font-black uppercase tracking-[0.1em] z-10">
+                                        <span>Target_PE</span>
+                                        <span className="text-foreground/50 tracking-widest">{pe}x</span>
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    <div className="bg-gray-900/30 border border-gray-800 rounded-[2.5rem] p-10 mt-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                    <div className="bg-card/40 backdrop-blur-xl border border-foreground/5 rounded-[3.5rem] p-12 shadow-3xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-96 h-96 bg-foreground/5 rounded-full filter blur-[120px] -mr-32 -mt-32 pointer-events-none group-hover:bg-foreground/10 transition-all duration-1000"></div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative z-10">
                             <div>
-                                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                                    <RefreshCw className="w-4 h-4 text-emerald-500" />
-                                    Forecast Path (Year 3)
+                                <h3 className="text-[10px] font-black text-foreground/20 uppercase tracking-[0.4em] mb-10 flex items-center gap-3">
+                                    <div className="w-4 h-px bg-foreground/20"></div>
+                                    Forward Projection Path (T+3Y)
                                 </h3>
-                                <div className="space-y-6 font-mono">
-                                    <div className="flex justify-between items-end border-b border-gray-800/50 pb-2">
-                                        <span className="text-xs text-gray-600 font-bold">PROJECTED REVENUE</span>
-                                        <span className="text-2xl font-black text-white">${(targetResults.rev3Y / 1000).toFixed(2)}B</span>
+                                <div className="space-y-10 font-mono">
+                                    <div className="flex justify-between items-end border-b border-foreground/10 pb-4 group/row">
+                                        <span className="text-[10px] text-foreground/20 font-black uppercase tracking-[0.2em] group-hover/row:text-foreground/40 transition-colors">Gross Revenue</span>
+                                        <span className="text-4xl font-extralight tracking-tighter text-foreground leading-none">${(targetResults.rev3Y / 1000).toFixed(2)}B</span>
                                     </div>
-                                    <div className="flex justify-between items-end border-b border-gray-800/50 pb-2">
-                                        <span className="text-xs text-gray-600 font-bold">PROJECTED NET INCOME</span>
-                                        <span className="text-2xl font-black text-emerald-400">${(targetResults.ni3Y / 1000).toFixed(2)}B</span>
+                                    <div className="flex justify-between items-end border-b border-foreground/10 pb-4 group/row">
+                                        <span className="text-[10px] text-foreground/20 font-black uppercase tracking-[0.2em] group-hover/row:text-foreground/40 transition-colors">Operating Income</span>
+                                        <span className="text-4xl font-extralight tracking-tighter text-emerald-500 leading-none">${(targetResults.ni3Y / 1000).toFixed(2)}B</span>
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-gray-800/20 p-8 rounded-3xl border border-gray-800/50 flex flex-col justify-center gap-4">
-                                <p className="text-[11px] text-gray-500 leading-relaxed uppercase tracking-widest font-bold pr-4">
-                                    The 3-Year Target model projects future earnings based on compounded revenue growth and target operational efficiency (margins).
+                            <div className="bg-foreground/5 backdrop-blur-md p-10 rounded-[2.5rem] border border-foreground/5 flex flex-col justify-center gap-6 shadow-xl">
+                                <p className="text-xs text-foreground/40 leading-relaxed uppercase tracking-[0.2em] font-black pr-8">
+                                    Strategic earnings mapping based on compounded scaling and operational optimization. Synthetic forecasting is probabilistic.
                                 </p>
-                                <div className="flex flex-wrap gap-2">
-                                    <div className="px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-[9px] font-black uppercase tracking-widest">Growth First</div>
-                                    <div className="px-3 py-1 bg-blue-500/10 text-blue-400 rounded-full text-[9px] font-black uppercase tracking-widest">Scenario Based</div>
+                                <div className="flex flex-wrap gap-3">
+                                    <div className="px-5 py-2 bg-emerald-500/5 text-emerald-500 border border-emerald-500/10 rounded-full text-[8px] font-black uppercase tracking-widest">Growth_Scaling</div>
+                                    <div className="px-5 py-2 bg-blue-500/5 text-blue-500 border border-blue-500/10 rounded-full text-[8px] font-black uppercase tracking-widest">Scenario_Modeling</div>
                                 </div>
                             </div>
                         </div>

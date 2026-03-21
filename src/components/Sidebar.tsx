@@ -1,8 +1,9 @@
 'use client';
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTheme } from "next-themes";
 import { 
   LayoutGrid, 
   Briefcase, 
@@ -12,7 +13,15 @@ import {
   Globe,
   Settings,
   LogOut,
-  LogIn
+  LogIn,
+  Sun,
+  Moon,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  X,
+  TrendingUp,
+  User
 } from "lucide-react";
 import { auth, googleProvider } from "@/lib/firebase";
 import { signInWithPopup, signOut } from "firebase/auth";
@@ -29,116 +38,203 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
   const [user, loading] = useAuthState(auth);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  // Avoid hydration mismatch
+  useEffect(() => setMounted(true), []);
 
   const login = async () => {
     try {
-      console.log("Starting Google Login...");
       await signInWithPopup(auth, googleProvider);
-      console.log("Login successful");
     } catch (error: any) {
-      console.error("Login failed full error:", error);
-      alert("Login failed: " + (error.message || "Unknown error occurred"));
+      console.error("Login failed:", error);
+      alert("Login failed: " + (error.message || "Unknown error"));
     }
   };
 
   const logout = () => signOut(auth);
 
+  if (!mounted) return null;
+
+  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+
   return (
-    <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 fixed h-full z-20 shadow-2xl">
-      {/* Brand Header */}
-      <div className="p-8 border-b border-gray-800/50">
-        <div className="flex items-center gap-3 mb-1">
-          <div className="w-8 h-8 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg shadow-emerald-900/40">
-            <LayoutGrid className="text-gray-950 w-5 h-5 stroke-[2.5]" />
-          </div>
-          <h1 className="text-xl font-black text-white tracking-tight uppercase">
-            Command <span className="text-emerald-500">Center</span>
-          </h1>
-        </div>
-        <p className="text-[10px] text-gray-500 font-mono tracking-[0.2em] uppercase mt-1 opacity-70">Tactical Financial OS</p>
-      </div>
-      
-      {/* User Section */}
-      <div className="px-6 py-6 border-b border-gray-800/50">
-        {loading ? (
-          <div className="h-10 w-full bg-gray-800 animate-pulse rounded-xl" />
-        ) : user ? (
-          <div className="flex items-center gap-3">
-            {user.photoURL ? (
-              <img src={user.photoURL} alt={user.displayName || ""} className="w-10 h-10 rounded-full border-2 border-emerald-500/20 shadow-lg" />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-gray-950 font-black">
-                {user.displayName?.charAt(0) || "U"}
-              </div>
-            )}
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-xs font-bold text-white truncate">{user.displayName}</span>
-              <button onClick={logout} className="text-[9px] text-gray-500 flex items-center gap-1 hover:text-emerald-500 transition-colors uppercase font-black tracking-widest">
-                <LogOut className="w-3 h-3" /> Sign Out
-              </button>
+    <>
+      {/* Mobile Header (Only visible on small screens) */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50">
+        <div className="flex items-center justify-between p-4 border-b border-foreground/5 bg-background/80 backdrop-blur-md">
+          <div className="flex items-center gap-2">
+            <div className="bg-foreground p-1.5 rounded-lg">
+              <TrendingUp className="w-4 h-4 text-background" />
             </div>
+            <span className="text-lg font-extralight tracking-tighter text-foreground">
+              Quick<span className="text-accent-gold font-bold">Financials</span>
+            </span>
           </div>
-        ) : (
-          <button 
-            onClick={login}
-            className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
-          >
-            <LogIn className="w-3.5 h-3.5" /> Login with Google
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-foreground/60">
+            {isMobileMenuOpen ? <X /> : <Menu />}
           </button>
-        )}
+        </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 p-4 pt-6 space-y-1.5 overflow-y-auto">
-        <div className="px-4 mb-4">
-          <span className="text-[10px] font-bold text-gray-600 uppercase tracking-[0.15em]">Main Navigation</span>
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 bg-background/95 backdrop-blur-xl z-40 pt-20 px-6 space-y-6 animate-in fade-in slide-in-from-top-4">
+          <nav className="space-y-4">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-4 p-4 rounded-xl border ${
+                  pathname === item.href 
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
+                    : "border-transparent text-foreground/60"
+                }`}
+              >
+                <item.icon className="w-6 h-6" />
+                <span className="font-bold text-lg">{item.name}</span>
+              </Link>
+            ))}
+          </nav>
+          <div className="pt-6 border-t border-foreground/5">
+             <button onClick={toggleTheme} className="flex items-center gap-4 p-4 w-full">
+                {theme === 'dark' ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
+                <span className="font-bold">Toggle Theme</span>
+             </button>
+          </div>
         </div>
-        
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          const Icon = item.icon;
-          
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex items-center justify-between group px-4 py-3 rounded-xl transition-all duration-300 border ${
-                isActive 
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-sm" 
-                  : "bg-transparent border-transparent text-gray-400 hover:bg-gray-800/50 hover:text-gray-200"
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside 
+        className={`hidden lg:flex flex-col h-screen fixed sticky top-0 bg-sidebar border-r border-foreground/5 transition-all duration-300 z-30 ${
+          isCollapsed ? "w-20" : "w-64"
+        }`}
+      >
+        {/* Toggle Button */}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3 top-10 w-6 h-6 bg-background border border-foreground/10 rounded-full flex items-center justify-center hover:bg-foreground/5 transition-colors z-40"
+        >
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
+        {/* Brand Header */}
+        <div className={`p-6 border-b border-foreground/5 flex items-center gap-3 ${isCollapsed ? 'justify-center' : ''}`}>
+          <div className="bg-foreground p-1.5 rounded-lg shrink-0">
+            <TrendingUp className="w-5 h-5 text-background" />
+          </div>
+          {!isCollapsed && (
+            <span className="text-lg font-extralight tracking-tighter text-foreground">
+              Quick<span className="text-accent-gold font-bold">Financials</span>
+            </span>
+          )}
+        </div>
+
+        {/* User Section */}
+        <div className={`p-6 border-b border-foreground/5 overflow-hidden ${isCollapsed ? "px-5" : ""}`}>
+          {loading ? (
+            <div className="h-10 w-full bg-foreground/5 animate-pulse rounded-xl" />
+          ) : user ? (
+            <div className="flex items-center gap-3">
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="" className="w-10 h-10 rounded-full border border-foreground/10" />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 font-bold">
+                  {user.displayName?.charAt(0)}
+                </div>
+              )}
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-bold truncate">{user.displayName}</span>
+                  <button onClick={logout} className="text-[10px] text-foreground/40 hover:text-emerald-500 flex items-center gap-1 font-bold uppercase tracking-wider">
+                    <LogOut size={10} /> Logout
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button 
+              onClick={login}
+              className={`flex items-center justify-center gap-2 bg-foreground text-background rounded-xl font-bold uppercase tracking-widest transition-all active:scale-95 ${
+                isCollapsed ? "w-10 h-10 p-0" : "w-full py-3 text-[10px]"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? "scale-110" : "group-hover:scale-110"}`} />
-                <div className="flex flex-col text-left">
-                  <span className="text-sm font-semibold tracking-wide">{item.name}</span>
-                  <span className={`text-[9px] uppercase tracking-wider font-bold opacity-60 ${isActive ? "text-emerald-500" : "text-gray-500"}`}>
-                    {item.labelHe}
-                  </span>
+              <LogIn size={isCollapsed ? 18 : 14} />
+              {!isCollapsed && "Login"}
+            </button>
+          )}
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center group px-4 py-3 rounded-xl transition-all duration-200 border ${
+                  isActive 
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500" 
+                    : "border-transparent text-foreground/50 hover:bg-foreground/5 hover:text-foreground"
+                }`}
+              >
+                <item.icon className={`w-5 h-5 shrink-0 ${isActive ? "scale-110" : "group-hover:scale-110 transition-transform"}`} />
+                {!isCollapsed && (
+                  <div className="ml-3 flex flex-col overflow-hidden">
+                    <span className="text-sm font-bold tracking-tight">{item.name}</span>
+                    <span className={`text-[9px] uppercase font-bold opacity-40 ${isActive ? "text-emerald-500" : ""}`}>
+                      {item.labelHe}
+                    </span>
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Theme Toggle & Footer */}
+        <div className="p-4 border-t border-foreground/5 space-y-4">
+           {!isCollapsed ? (
+             <button 
+                onClick={toggleTheme}
+                className="flex items-center justify-between w-full px-4 py-3 bg-foreground/5 rounded-xl text-xs font-bold transition-all hover:bg-foreground/10"
+             >
+                <div className="flex items-center gap-2">
+                  {theme === 'dark' ? <Moon size={14} /> : <Sun size={14} />}
+                  <span>{theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</span>
                 </div>
-              </div>
-              {isActive && (
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-glow animate-pulse" />
-              )}
-            </Link>
-          );
-        })}
-      </nav>
-      
-      {/* Footer / Status */}
-      <div className="p-4 border-t border-gray-800 bg-gray-900/50 backdrop-blur-sm">
-        <div className="flex items-center justify-between px-2 mb-2">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-gray-400 font-mono tracking-widest uppercase">SYS_ACTIVE</span>
-          </div>
-          <Settings className="w-3.5 h-3.5 text-gray-600 hover:text-gray-400 cursor-pointer transition-colors" />
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${theme === 'dark' ? 'bg-emerald-500' : 'bg-foreground/20'}`}>
+                  <div className={`absolute top-1 w-2 h-2 rounded-full bg-white transition-all ${theme === 'dark' ? 'left-5' : 'left-1'}`} />
+                </div>
+             </button>
+           ) : (
+             <button 
+                onClick={toggleTheme}
+                className="w-full aspect-square flex items-center justify-center text-foreground/60 hover:text-foreground bg-foreground/5 rounded-xl"
+             >
+               {theme === 'dark' ? <Moon size={20} /> : <Sun size={20} />}
+             </button>
+           )}
+           
+           {!isCollapsed && (
+             <div className="flex items-center justify-between px-2 opacity-30">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[9px] font-mono font-bold tracking-[0.2em] uppercase">SYST_ACTV</span>
+                </div>
+                <Settings size={12} />
+             </div>
+           )}
         </div>
-        <div className="h-1 w-full bg-gray-800 rounded-full overflow-hidden">
-          <div className="h-full w-2/3 bg-emerald-500/50 rounded-full" />
-        </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
+
