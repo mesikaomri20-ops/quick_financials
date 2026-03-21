@@ -81,6 +81,12 @@ export type MacroData = {
   yield10y: MacroIndicator;
 };
 
+export type YieldCurvePoint = {
+  maturity: string;
+  yield: number;
+  label: string;
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 const n = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
@@ -328,5 +334,37 @@ export async function getMacroData(): Promise<MacroData | null> {
   } catch (e) {
     console.error("[Macro] Error state:", e);
     return null;
+  }
+}
+
+export async function getYieldCurveData(): Promise<YieldCurvePoint[]> {
+  const series = [
+    { id: "DTB3", label: "3M" },
+    { id: "DGS1",  label: "1Y" },
+    { id: "DGS2",  label: "2Y" },
+    { id: "DGS5",  label: "5Y" },
+    { id: "DGS10", label: "10Y" },
+    { id: "DGS20", label: "20Y" },
+    { id: "DGS30", label: "30Y" },
+  ];
+
+  try {
+    const results = await Promise.all(
+      series.map(async (s) => {
+        const url = `${FRED_BASE}/series/observations?series_id=${s.id}&api_key=${FRED_KEY}&file_type=json&sort_order=desc&limit=1`;
+        const res = await fetch(url, { 
+          next: { revalidate: 3600 },
+          cache: "no-store" 
+        });
+        if (!res.ok) return { maturity: s.label, yield: 0, label: s.label };
+        const data = await res.json();
+        const val = parseFloat(data.observations?.[0]?.value) || 0;
+        return { maturity: s.label, yield: val, label: s.label };
+      })
+    );
+    return results;
+  } catch (e) {
+    console.error("[YieldCurve] Error:", e);
+    return [];
   }
 }
