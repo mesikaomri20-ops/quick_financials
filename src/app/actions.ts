@@ -108,16 +108,22 @@ async function yahooChartPrice(ticker: string): Promise<{ price: number; changeP
 
 /**
  * Build the chart X-axis label from an FMP row.
- * Annual:    "2024"
- * Quarterly: "Q1 2024"  (from row.period + row.fiscalYear)
+ * Annual:    "2024"                  (from fiscalYear)
+ * Quarterly: "Q1 2026"               (from period + fiscalYear)
+ * Verified fields from live /stable/ quarterly response:
+ *   row.period      = "Q1" | "Q2" | "Q3" | "Q4"
+ *   row.fiscalYear  = "2026" (string)
  */
 function rowLabel(row: any, period: Period): string {
-  const fiscalYear = row.fiscalYear ? String(row.fiscalYear) : (row.date ?? "").substring(0, 4);
+  // fiscalYear is confirmed present in both annual and quarterly stable responses
+  const year = row.fiscalYear
+    ? String(row.fiscalYear)
+    : (row.calendarYear ? String(row.calendarYear) : (row.date ?? "").substring(0, 4));
   if (period === 'quarter') {
-    const q = row.period ?? "";          // "Q1", "Q2", "Q3", "Q4"
-    return q ? `${q} ${fiscalYear}` : fiscalYear;
+    const q = String(row.period ?? "");  // "Q1", "Q2", "Q3", "Q4"
+    return q.startsWith('Q') && year.length === 4 ? `${q} ${year}` : year;
   }
-  return fiscalYear;
+  return year;
 }
 
 // ─── Main Export ───────────────────────────────────────────────────────────
@@ -130,7 +136,11 @@ export async function getStockData(
   console.log(`[getStockData] ${ticker} period=${period}`);
 
   try {
-    const limit = period === 'quarter' ? '8' : '5';
+    // 20 quarters = 5 years of quarterly data; 5 annual rows for annual
+    const limit = period === 'quarter' ? '20' : '5';
+
+    // Guard: ensure label is usable (min 4 chars for annual "2021", 7 for quarterly "Q1 2021")
+    const minLabelLen = period === 'quarter' ? 7 : 4;
 
     const stmtParams = (extra: Record<string, string> = {}) => ({
       symbol: ticker,
@@ -181,7 +191,7 @@ export async function getStockData(
 
     for (const row of incomeArr) {
       const label = rowLabel(row, period);
-      if (label.length < 4) continue;
+      if (label.length < minLabelLen) continue;
       const e = ensureLabel(label);
       e.revenue         = n(row.revenue);
       e.grossProfit     = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
@@ -191,7 +201,7 @@ export async function getStockData(
 
     for (const row of balanceArr) {
       const label = rowLabel(row, period);
-      if (label.length < 4) continue;
+      if (label.length < minLabelLen) continue;
       const e = ensureLabel(label);
       e.totalAssets      = n(row.totalAssets);
       e.totalLiabilities = n(row.totalLiabilities);
@@ -203,7 +213,7 @@ export async function getStockData(
 
     for (const row of cashArr) {
       const label = rowLabel(row, period);
-      if (label.length < 4) continue;
+      if (label.length < minLabelLen) continue;
       const e = ensureLabel(label);
       e.operatingCashFlow = n(row.operatingCashFlow) || n(row.netCashProvidedByOperatingActivities);
       e.freeCashFlow      = n(row.freeCashFlow) || (n(row.operatingCashFlow) + n(row.capitalExpenditure));
@@ -299,7 +309,11 @@ export async function getStockData(
       financials,
     };
 
-    if (!quote && financials.length === 0) return null;
+    // Return even if only quote is available (financials may be empty for some tickers)
+    if (!quote && financials.length === 0) {
+      console.error(`[getStockData] No data at all for ${ticker}`);
+      return null;
+    }
 
     return { quote, fundamentals, quoteRateLimited: false };
   } catch (error: any) {
