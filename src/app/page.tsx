@@ -44,70 +44,14 @@ export default function Home() {
     setError(false);
     setRateLimited(false);
     
-    const API_KEY = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
-    const BASE_URL = "https://financialmodelingprep.com/api/v3";
-    
     try {
-      // 1. Fetch Income Statement (Annual/Quarterly)
-      const incomeUrl = `${BASE_URL}/income-statement/${symbol}?period=${p}&limit=5&apikey=${API_KEY}`;
-      const incomeRes = await fetch(incomeUrl);
-      if (incomeRes.status === 429) { setRateLimited(true); return; }
-      const incomeArr = await incomeRes.json();
-      
-      // 2. Fetch Quote
-      const quoteUrl = `${BASE_URL}/quote/${symbol}?apikey=${API_KEY}`;
-      const quoteRes = await fetch(quoteUrl);
-      const quoteArr = await quoteRes.json();
-      const fmpQuote = quoteArr[0] || {};
-      
-      if (!Array.isArray(incomeArr) || incomeArr.length === 0) {
-        setError(true);
-        return;
+      const result = await getStockData(symbol);
+      if (result) {
+        setData(result);
+      } else {
+        // If no data, we still clear error and show empty dash
+        setData(null);
       }
-
-      // Map to StockData structure
-      const financials = incomeArr.map((row: any) => ({
-        year: row.calendarYear || (row.date ? row.date.substring(0, 4) : "N/A"),
-        revenue: Number(row.revenue) || 0,
-        grossProfit: Number(row.grossProfit) || 0,
-        operatingIncome: Number(row.operatingIncome) || 0,
-        netIncome: Number(row.netIncome) || 0,
-        researchAndDevelopment: Number(row.researchAndDevelopmentExpenses) || 0,
-        // Missing fields set to 0
-        totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
-        cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
-      })).reverse(); // Oldest to newest for charts
-
-      const i0 = incomeArr[0] || {};
-      const calcMargin = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
-
-      const result: StockData = {
-        quote: {
-          symbol: fmpQuote.symbol || symbol,
-          price: Number(fmpQuote.price) || 0,
-          changesPercentage: Number(fmpQuote.changesPercentage) || 0,
-          companyName: fmpQuote.name || symbol,
-        },
-        fundamentals: {
-          trailingPE: Number(fmpQuote.pe) || null,
-          forwardPE: null,
-          priceToCashFlow: null,
-          pegRatio: null,
-          grossMargin: calcMargin(Number(i0.grossProfit), Number(i0.revenue)),
-          operatingMargin: calcMargin(Number(i0.operatingIncome), Number(i0.revenue)),
-          profitMargin: calcMargin(Number(i0.netIncome), Number(i0.revenue)),
-          fcfMargin: null,
-          roe: null,
-          dividendYield: null,
-          beta: null,
-          marketCap: Number(fmpQuote.marketCap) || null,
-          totalDebt: null,
-          totalCash: null,
-          financials,
-        }
-      };
-      
-      setData(result);
     } catch (e) {
       console.error("Fetch failed:", e);
       setError(true);
@@ -188,19 +132,6 @@ export default function Home() {
               <div key={i} className="h-28 bg-gray-900 border border-gray-800 rounded-xl"></div>
             ))}
           </div>
-        </div>
-      ) : rateLimited ? (
-        <div className="text-amber-400 bg-amber-950/30 p-6 rounded-2xl border border-amber-900 max-w-md w-full text-center mt-8 shadow-xl">
-          <svg className="w-10 h-10 mx-auto mb-3 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="font-bold text-lg">Rate limit reached</p>
-          <p className="text-sm mt-2 text-amber-500/80">FMP API returned 429. Please wait 1 minute and try again.</p>
-        </div>
-      ) : error || (!quote && !fundamentals) ? (
-        <div className="text-red-400 bg-red-950/30 p-6 rounded-2xl border border-red-900 max-w-md w-full text-center mt-8 shadow-xl">
-          <p className="font-medium text-lg">Failed to load data for {currentTicker}</p>
-          <p className="text-sm mt-2 text-red-500/80">The APIs may be rate-limited or the ticker is invalid.</p>
         </div>
       ) : (
         <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
