@@ -1,5 +1,3 @@
-"use client";
-
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -11,8 +9,12 @@ import {
   Percent, 
   Globe,
   Settings,
-  ChevronRight
+  LogOut,
+  LogIn
 } from "lucide-react";
+import { auth, googleProvider } from "@/lib/firebase";
+import { signInWithPopup, signOut } from "firebase/auth";
+import { useAuthState } from "react-firebase-hooks/auth";
 
 const navItems = [
   { name: "Dashboard", href: "/", icon: LayoutGrid, labelHe: "לוח בקרה" },
@@ -25,6 +27,17 @@ const navItems = [
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const [user, loading] = useAuthState(auth);
+
+  const login = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+      console.error("Login failed", error);
+    }
+  };
+
+  const logout = () => signOut(auth);
 
   return (
     <aside className="w-64 bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0 fixed h-full z-20 shadow-2xl">
@@ -41,6 +54,36 @@ export default function Sidebar() {
         <p className="text-[10px] text-gray-500 font-mono tracking-[0.2em] uppercase mt-1 opacity-70">Tactical Financial OS</p>
       </div>
       
+      {/* User Section */}
+      <div className="px-6 py-6 border-b border-gray-800/50">
+        {loading ? (
+          <div className="h-10 w-full bg-gray-800 animate-pulse rounded-xl" />
+        ) : user ? (
+          <div className="flex items-center gap-3">
+            {user.photoURL ? (
+              <img src={user.photoURL} alt={user.displayName || ""} className="w-10 h-10 rounded-full border-2 border-emerald-500/20 shadow-lg" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-gray-950 font-black">
+                {user.displayName?.charAt(0) || "U"}
+              </div>
+            )}
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-xs font-bold text-white truncate">{user.displayName}</span>
+              <button onClick={logout} className="text-[9px] text-gray-500 flex items-center gap-1 hover:text-emerald-500 transition-colors uppercase font-black tracking-widest">
+                <LogOut className="w-3 h-3" /> Sign Out
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button 
+            onClick={login}
+            className="flex items-center justify-center gap-2 w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/20 active:scale-95"
+          >
+            <LogIn className="w-3.5 h-3.5" /> Login with Google
+          </button>
+        )}
+      </div>
+
       {/* Navigation */}
       <nav className="flex-1 p-4 pt-6 space-y-1.5 overflow-y-auto">
         <div className="px-4 mb-4">
