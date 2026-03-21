@@ -1,7 +1,7 @@
 "use server";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
+const FMP_KEY  = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
 // ─── Module-level result cache (lives in warm serverless instance) ─────────
