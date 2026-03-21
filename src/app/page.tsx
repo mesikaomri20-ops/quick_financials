@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { getStockData, type StockData, type Period } from "./actions";
+import { getStockData, type StockData, type Period, type StockQuote } from "./actions";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, AreaChart, Area, ComposedChart
@@ -36,6 +36,7 @@ export default function Home() {
   const [currentTicker, setCurrentTicker] = useState("AAPL");
   const [period, setPeriod] = useState<Period>("annual");
   const [data, setData] = useState<StockData | null>(null);
+  const [quoteState, setQuoteState] = useState<StockQuote | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
@@ -48,8 +49,10 @@ export default function Home() {
       const result = await getStockData(symbol);
       if (result) {
         setData(result);
+        setQuoteState(result.quote);
       } else {
         setData(null);
+        setQuoteState(null);
       }
     } catch (e) {
       console.error("Fetch failed:", e);
@@ -84,7 +87,7 @@ export default function Home() {
     }
   };
 
-  const quote = data?.quote;
+  const quote = quoteState;
   const fundamentals = data?.fundamentals;
 
   return (
@@ -119,23 +122,13 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="w-full max-w-4xl flex flex-col items-center">
-        {loading ? (
-          <div className="w-full max-w-4xl flex flex-col items-center">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-sm w-full mb-8 min-h-[220px] flex items-center justify-center animate-pulse">
-              <div className="flex flex-col items-center space-y-4">
-                <div className="h-8 w-20 bg-gray-800 rounded"></div>
-                <div className="h-12 w-32 bg-gray-800 rounded"></div>
-                <div className="h-6 w-24 bg-gray-800 rounded"></div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full animate-pulse px-4 md:px-0">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-28 bg-gray-900 border border-gray-800 rounded-xl"></div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+        {/* Raw Data Dump (Debug) */}
+        <div className="w-full bg-black/50 p-4 rounded-xl mb-6 border border-gray-800 font-mono text-xs overflow-auto max-h-40">
+          <p className="text-gray-500 mb-2 uppercase tracking-widest text-[10px]">Raw Quote Data:</p>
+          <pre>{JSON.stringify(quote, null, 2)}</pre>
+        </div>
+
+        <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
 
             {/* Quote Card */}
             {quote ? (
@@ -285,7 +278,6 @@ export default function Home() {
               </div>
             )}
           </div>
-        )}
       </div>
     </div>
   );
