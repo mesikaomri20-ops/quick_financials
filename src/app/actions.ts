@@ -1,12 +1,17 @@
 "use server";
 
-// ─── FMP Configuration ─────────────────────────────────────────────────────
+// ─── Config ────────────────────────────────────────────────────────────────
 const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
+// ─── Module-level result cache (lives in warm serverless instance) ─────────
+// Key: `${ticker}:${period}` — TTL: 5 minutes
+const _cache = new Map<string, { data: StockData; ts: number }>();
+const CACHE_TTL = 5 * 60 * 1000;
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-export type Period = 'annual' | 'quarter';
+export type Period = "annual" | "quarter";
 
 export type StockQuote = {
   symbol: string;
@@ -15,7 +20,7 @@ export type StockQuote = {
 };
 
 export type FinancialYearData = {
-  year: string;          // "2024" for annual, "Q1 2024" for quarterly
+  year: string;
   revenue: number;
   grossProfit: number;
   operatingIncome: number;
@@ -61,31 +66,39 @@ const n = (val: any): number => {
   const num = Number(val);
   return isNaN(num) ? 0 : num;
 };
-
-const nOrNull = (val: any): number | null => {
-  const num = n(val);
-  return num === 0 ? null : num;
-};
+const nOrNull = (val: any): number | null => { const v = n(val); return v === 0 ? null : v; };
+const pct     = (num: number, den: number): number | null => den > 0 ? num / den : null;
 
 // ─── FMP Fetch ─────────────────────────────────────────────────────────────
 
-async function fmpGet(path: string, params: Record<string, string> = {}): Promise<any[]> {
-  const query = new URLSearchParams({ ...params, apikey: FMP_KEY });
-  const url = `${FMP_BASE}${path}?${query.toString()}`;
-  console.log(`[FMP] GET ${url.replace(FMP_KEY, "***")}`);
+/**
+ * Single FMP request. Throws on any non-2xx, including 429.
+ * The caller should catch 429s and degrade gracefully.
+ */
+async function fmpGet(path: string, params: Record<string, string>): Promise<any[]> {
+  const qs  = new URLSearchParams({ ...params, apikey: FMP_KEY });
+  const url = `${FMP_BASE}${path}?${qs}`;
+  console.log(`[FMP] ${path}?${new URLSearchParams({ ...params, apikey: "***" })}`);
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`[FMP] HTTP ${res.status} — ${path} — ${body.slice(0, 200)}`);
+    throw new Error(`HTTP ${res.status} — ${path} — ${body.slice(0, 150)}`);
   }
   const json = await res.json();
   if (!Array.isArray(json)) {
-    const msg = (json as any)?.["Error Message"] ?? (json as any)?.message ?? JSON.stringify(json).slice(0, 200);
-    throw new Error(`[FMP] Non-array: ${msg}`);
+    const msg  = (json as any)?.["Error Message"] ?? JSON.stringify(json).slice(0, 150);
+    throw new Error(`Non-array — ${path}: ${msg}`);
   }
   return json;
 }
 
+/** Try fmpGet; return [] on failure so callers don't crash. */
+async function fmpSafe(path: string, params: Record<string, string>): Promise<any[]> {
+  try { return await fmpGet(path, params); }
+  catch (e: any) { console.warn(`[FMP] ${path} failed (safe):`, e.message); return []; }
+}
+
+/** Yahoo /chart for price — no auth, not blocked. */
 async function yahooChartPrice(ticker: string): Promise<{ price: number; changePercent: number } | null> {
   try {
     const url = `https://query2.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`;
@@ -99,29 +112,20 @@ async function yahooChartPrice(ticker: string): Promise<{ price: number; changeP
     if (!meta) return null;
     return { price: meta.regularMarketPrice ?? 0, changePercent: meta.regularMarketChangePercent ?? 0 };
   } catch (e: any) {
-    console.warn(`[YAHOO_CHART] Failed for ${ticker}: ${e.message}`);
+    console.warn(`[YAHOO] Chart price failed: ${e.message}`);
     return null;
   }
 }
 
-// ─── Row Label ─────────────────────────────────────────────────────────────
+// ─── Row-label Helper ──────────────────────────────────────────────────────
 
-/**
- * Build the chart X-axis label from an FMP row.
- * Annual:    "2024"                  (from fiscalYear)
- * Quarterly: "Q1 2026"               (from period + fiscalYear)
- * Verified fields from live /stable/ quarterly response:
- *   row.period      = "Q1" | "Q2" | "Q3" | "Q4"
- *   row.fiscalYear  = "2026" (string)
- */
 function rowLabel(row: any, period: Period): string {
-  // fiscalYear is confirmed present in both annual and quarterly stable responses
   const year = row.fiscalYear
     ? String(row.fiscalYear)
     : (row.calendarYear ? String(row.calendarYear) : (row.date ?? "").substring(0, 4));
-  if (period === 'quarter') {
-    const q = String(row.period ?? "");  // "Q1", "Q2", "Q3", "Q4"
-    return q.startsWith('Q') && year.length === 4 ? `${q} ${year}` : year;
+  if (period === "quarter") {
+    const q = String(row.period ?? "");
+    return q.startsWith("Q") && year.length === 4 ? `${q} ${year}` : year;
   }
   return year;
 }
@@ -130,79 +134,80 @@ function rowLabel(row: any, period: Period): string {
 
 export async function getStockData(
   symbol: string,
-  period: Period = 'annual'
+  period: Period = "annual"
 ): Promise<StockData | null> {
-  const ticker = symbol.toUpperCase().trim();
-  console.log(`[getStockData] ${ticker} period=${period}`);
+  const ticker   = symbol.toUpperCase().trim();
+  const cacheKey = `${ticker}:${period}`;
+
+  // ── Cache hit ───────────────────────────────────────────────────────────
+  const hit = _cache.get(cacheKey);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) {
+    console.log(`[CACHE] Hit for ${cacheKey}`);
+    return hit.data;
+  }
+
+  console.log(`[getStockData] Fetching ${ticker} (${period})…`);
 
   try {
-    // 20 quarters = 5 years of quarterly data; 5 annual rows for annual
-    const limit = period === 'quarter' ? '20' : '5';
+    const limit  = period === "quarter" ? "20" : "5";
+    const minLen = period === "quarter" ? 7 : 4;
+    const stmtP  = { symbol: ticker, period, limit };
 
-    // Guard: ensure label is usable (min 4 chars for annual "2021", 7 for quarterly "Q1 2021")
-    const minLabelLen = period === 'quarter' ? 7 : 4;
+    // ── TIER 1: Core statements + profile — always parallel (4 calls) ──────
+    // These are essential. We compute ALL possible ratios from this data alone
+    // so that the dashboard always renders even if Tier 2 is rate-limited.
+    const [incomeRaw, balanceRaw, cashRaw, profileRaw] = await Promise.allSettled([
+      fmpGet("/income-statement",        stmtP),
+      fmpGet("/balance-sheet-statement", stmtP),
+      fmpGet("/cash-flow-statement",     stmtP),
+      fmpGet("/profile",                 { symbol: ticker }),
+    ]);
 
-    const stmtParams = (extra: Record<string, string> = {}) => ({
-      symbol: ticker,
-      period,           // FMP: "annual" | "quarter"
-      limit,
-      ...extra,
-    });
+    const incomeArr:  any[] = incomeRaw.status  === "fulfilled" ? incomeRaw.value       : [];
+    const balanceArr: any[] = balanceRaw.status === "fulfilled" ? balanceRaw.value      : [];
+    const cashArr:    any[] = cashRaw.status    === "fulfilled" ? cashRaw.value         : [];
+    const profile:    any   = profileRaw.status === "fulfilled" ? (profileRaw.value[0] ?? {}) : {};
 
-    const [incomeRaw, balanceRaw, cashRaw, profileRaw, ratiosRaw, keyMetricsRaw] =
-      await Promise.allSettled([
-        fmpGet("/income-statement",        stmtParams()),
-        fmpGet("/balance-sheet-statement", stmtParams()),
-        fmpGet("/cash-flow-statement",     stmtParams()),
-        fmpGet("/profile",                 { symbol: ticker }),
-        fmpGet("/ratios-ttm",              { symbol: ticker }),
-        fmpGet("/key-metrics-ttm",         { symbol: ticker }),
-      ]);
+    if (incomeRaw.status  === "rejected") console.error("[FMP] income failed:",  (incomeRaw  as any).reason?.message);
+    if (balanceRaw.status === "rejected") console.error("[FMP] balance failed:", (balanceRaw as any).reason?.message);
+    if (cashRaw.status    === "rejected") console.error("[FMP] cash failed:",    (cashRaw    as any).reason?.message);
 
-    const incomeArr:  any[] = incomeRaw.status     === "fulfilled" ? incomeRaw.value          : [];
-    const balanceArr: any[] = balanceRaw.status    === "fulfilled" ? balanceRaw.value         : [];
-    const cashArr:    any[] = cashRaw.status       === "fulfilled" ? cashRaw.value            : [];
-    const profile:    any   = profileRaw.status    === "fulfilled" ? (profileRaw.value[0]    ?? {}) : {};
-    const ratios:     any   = ratiosRaw.status     === "fulfilled" ? (ratiosRaw.value[0]     ?? {}) : {};
-    const keyMetrics: any   = keyMetricsRaw.status === "fulfilled" ? (keyMetricsRaw.value[0] ?? {}) : {};
+    if (incomeArr.length > 0) console.log("[FMP] income[0]:", JSON.stringify(incomeArr[0]));
 
-    if (incomeRaw.status     === "rejected") console.error("[FMP] income failed:",      (incomeRaw     as any).reason?.message);
-    if (balanceRaw.status    === "rejected") console.error("[FMP] balance failed:",     (balanceRaw    as any).reason?.message);
-    if (cashRaw.status       === "rejected") console.error("[FMP] cashflow failed:",    (cashRaw       as any).reason?.message);
-    if (ratiosRaw.status     === "rejected") console.error("[FMP] ratios failed:",      (ratiosRaw     as any).reason?.message);
-    if (keyMetricsRaw.status === "rejected") console.error("[FMP] key-metrics failed:", (keyMetricsRaw as any).reason?.message);
+    // ── TIER 2: Enrichment — sequential with breathing room, safe fallback ─
+    // Only for PE multiples and dividend yield we can't derive from statements.
+    // 200 ms gap between calls to avoid 429 bursts.
+    await new Promise(r => setTimeout(r, 200));
+    const ratios = (await fmpSafe("/ratios-ttm", { symbol: ticker }))[0] ?? {};
 
-    if (incomeArr.length > 0) console.log(`[FMP] ${ticker} income[0]:`, JSON.stringify(incomeArr[0]));
+    await new Promise(r => setTimeout(r, 200));
+    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }))[0] ?? {};
 
-    // ── Map financials ────────────────────────────────────────────────────
+    // ── Map statements to FinancialYearData ────────────────────────────────
     const yearMap = new Map<string, FinancialYearData>();
-
-    const ensureLabel = (label: string): FinancialYearData => {
-      if (!yearMap.has(label)) {
-        yearMap.set(label, {
-          year: label,
-          revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0,
-          totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
-          cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
-        });
-      }
+    const ensure  = (label: string): FinancialYearData => {
+      if (!yearMap.has(label)) yearMap.set(label, {
+        year: label,
+        revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0,
+        totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
+        cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
+      });
       return yearMap.get(label)!;
     };
 
     for (const row of incomeArr) {
-      const label = rowLabel(row, period);
-      if (label.length < minLabelLen) continue;
-      const e = ensureLabel(label);
+      const lbl = rowLabel(row, period);
+      if (lbl.length < minLen) continue;
+      const e = ensure(lbl);
       e.revenue         = n(row.revenue);
       e.grossProfit     = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
       e.operatingIncome = n(row.operatingIncome) || n(row.ebit);
       e.netIncome       = n(row.netIncome);
     }
-
     for (const row of balanceArr) {
-      const label = rowLabel(row, period);
-      if (label.length < minLabelLen) continue;
-      const e = ensureLabel(label);
+      const lbl = rowLabel(row, period);
+      if (lbl.length < minLen) continue;
+      const e = ensure(lbl);
       e.totalAssets      = n(row.totalAssets);
       e.totalLiabilities = n(row.totalLiabilities);
       e.totalEquity      = n(row.totalStockholdersEquity) || n(row.totalEquity);
@@ -210,121 +215,132 @@ export async function getStockData(
       e.debt             = n(row.totalDebt) || (n(row.shortTermDebt) + n(row.longTermDebt));
       e.retainedEarnings = n(row.retainedEarnings);
     }
-
     for (const row of cashArr) {
-      const label = rowLabel(row, period);
-      if (label.length < minLabelLen) continue;
-      const e = ensureLabel(label);
+      const lbl = rowLabel(row, period);
+      if (lbl.length < minLen) continue;
+      const e = ensure(lbl);
       e.operatingCashFlow = n(row.operatingCashFlow) || n(row.netCashProvidedByOperatingActivities);
       e.freeCashFlow      = n(row.freeCashFlow) || (n(row.operatingCashFlow) + n(row.capitalExpenditure));
     }
 
-    // Sort by chronological order
-    // Annual: "2021" < "2022" — simple string/int sort
-    // Quarterly: "Q1 2024" — sort by year then quarter
     const financials = Array.from(yearMap.values()).sort((a, b) => {
-      if (period === 'quarter') {
-        const parseQ = (s: string) => {
-          const m = s.match(/^Q(\d)\s+(\d{4})$/);
-          return m ? parseInt(m[2]) * 10 + parseInt(m[1]) : 0;
-        };
-        return parseQ(a.year) - parseQ(b.year);
+      if (period === "quarter") {
+        const pq = (s: string) => { const m = s.match(/^Q(\d)\s+(\d{4})$/); return m ? +m[2] * 10 + +m[1] : 0; };
+        return pq(a.year) - pq(b.year);
       }
       return parseInt(a.year) - parseInt(b.year);
     });
 
     console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
 
-    // ── Quote ─────────────────────────────────────────────────────────────
+    // ── Quote ──────────────────────────────────────────────────────────────
     let quote: StockQuote | null = null;
-
     if (n(profile.price) > 0) {
-      quote = {
-        symbol: profile.symbol ?? ticker,
-        price: n(profile.price),
-        changesPercentage: n(profile.changePercentage),
-      };
+      quote = { symbol: profile.symbol ?? ticker, price: n(profile.price), changesPercentage: n(profile.changePercentage) };
     } else {
       const yp = await yahooChartPrice(ticker);
       if (yp) {
-        quote = {
-          symbol: ticker,
-          price: yp.price,
-          changesPercentage: Math.abs(yp.changePercent) < 5 ? yp.changePercent * 100 : yp.changePercent,
-        };
+        quote = { symbol: ticker, price: yp.price, changesPercentage: Math.abs(yp.changePercent) < 5 ? yp.changePercent * 100 : yp.changePercent };
       }
     }
 
-    // ── Fundamentals (always TTM — not period-dependent) ──────────────────
-    const lastCash = cashArr[0];
+    // ── Fundamentals: derive from statements first, enrich from Tier 2 ─────
+    //
+    // All margin/profitability fields are computed directly from incomeArr[0],
+    // balanceArr[0], cashArr[0] — no extra API call needed:
+    //   grossMargin     = grossProfit / revenue
+    //   operatingMargin = operatingIncome / revenue
+    //   profitMargin    = netIncome / revenue
+    //   fcfMargin       = freeCashFlow / revenue
+    //   ROE             = netIncome / totalEquity
+    //   trailingPE      = price / epsDiluted  (epsDiluted is in income statement)
+    //   P/FCF           = marketCap / annualFCF
+    //   dividendYield   = lastDividend / price  (profile.lastDividend)
+    //   PEG             = trailingPE / (epsGrowthRate * 100)
+    //   forwardPE       = price / (epsTTM * (1 + revenueGrowth))
+    //
+    // Ratios-ttm and key-metrics-ttm are used as *overrides* when available.
 
-    const fcfMarginCalc = (): number | null => {
-      const fcf = n(lastCash?.freeCashFlow);
-      const rev = n(incomeArr[0]?.revenue);
-      if (fcf !== 0 && rev > 0) return fcf / rev;
-      return null;
-    };
+    const i0   = incomeArr[0]  ?? {};   // Most recent income row
+    const b0   = balanceArr[0] ?? {};   // Most recent balance row
+    const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
+    const price = n(profile.price);
+    const mktCap = n(profile.marketCap);
 
-    const computeForwardPE = (): number | null => {
-      const price = n(profile.price);
-      if (price <= 0) return null;
-      const earningsYield = n(keyMetrics.earningsYieldTTM);
-      if (earningsYield <= 0) {
-        const trailingPE = n(ratios.priceToEarningsRatioTTM);
-        if (trailingPE <= 0) return null;
-        const rev0 = n(incomeArr[0]?.revenue);
-        const rev1 = n(incomeArr[1]?.revenue);
-        if (rev0 <= 0 || rev1 <= 0) return null;
-        const growthRate = (rev0 - rev1) / rev1;
-        if (growthRate <= 0) return null;
-        return trailingPE / (1 + growthRate);
-      }
-      const epsTTM = price * earningsYield;
-      const rev0 = n(incomeArr[0]?.revenue);
-      const rev1 = n(incomeArr[1]?.revenue);
-      const growthRate = (rev1 > 0 && rev0 > rev1) ? (rev0 - rev1) / rev1 : 0;
-      const epsForward = epsTTM * (1 + growthRate);
-      if (epsForward <= 0) return null;
-      return price / epsForward;
-    };
+    // Margins — derived
+    const grossMarginDerived     = pct(n(i0.grossProfit),    n(i0.revenue));
+    const operatingMarginDerived = pct(n(i0.operatingIncome) || n(i0.ebit), n(i0.revenue));
+    const profitMarginDerived    = pct(n(i0.netIncome),      n(i0.revenue));
+    const fcfMarginDerived       = pct(n(c0.freeCashFlow),   n(i0.revenue));
+    const roeDerived             = pct(n(i0.netIncome), n(b0.totalStockholdersEquity) || n(b0.totalEquity));
 
+    // Derived PE: price / epsDiluted (from income statement)
+    const epsDiluted    = n(i0.epsDiluted) || n(i0.eps);
+    const trailingPEDerived = (price > 0 && epsDiluted > 0) ? price / epsDiluted : null;
+
+    // Derived P/FCF: marketCap / annual FCF (from balance + cash)
+    const annualFCF     = n(c0.freeCashFlow);
+    const pfcfDerived   = (mktCap > 0 && annualFCF > 0) ? mktCap / annualFCF : null;
+
+    // Dividend yield: profile.lastDividend / price
+    const lastDiv       = n(profile.lastDividend);
+    const divYieldDerived = (price > 0 && lastDiv > 0) ? lastDiv / price : null;
+
+    // Forward PE
+    const eps0 = epsDiluted;
+    const eps1 = n(incomeArr[1]?.epsDiluted) || n(incomeArr[1]?.eps);
+    const epsGrowth = (eps0 > 0 && eps1 > 0 && eps0 > eps1) ? (eps0 - eps1) / eps1 : 0;
+    const forwardPEDerived = (price > 0 && eps0 > 0)
+      ? price / (eps0 * (1 + epsGrowth))
+      : null;
+
+    // PEG = trailingPE / epsGrowthPct (growth as percentage, e.g. 15 for 15%)
+    const pegDerived = (trailingPEDerived && epsGrowth > 0)
+      ? trailingPEDerived / (epsGrowth * 100)
+      : null;
+
+    // Prefer TTM values from ratios/key-metrics if they came through (may be null/empty)
     const fundamentals: YahooFundamentals = {
-      trailingPE:      nOrNull(ratios.priceToEarningsRatioTTM),
-      forwardPE:       computeForwardPE(),
-      priceToCashFlow: nOrNull(ratios.priceToFreeCashFlowRatioTTM) ?? nOrNull(ratios.priceToOperatingCashFlowRatioTTM),
-      pegRatio:        nOrNull(ratios.priceToEarningsGrowthRatioTTM),
+      trailingPE:      nOrNull(ratios.priceToEarningsRatioTTM)             ?? trailingPEDerived,
+      forwardPE:       forwardPEDerived,
+      priceToCashFlow: nOrNull(ratios.priceToFreeCashFlowRatioTTM)         ?? pfcfDerived,
+      pegRatio:        nOrNull(ratios.priceToEarningsGrowthRatioTTM)       ?? pegDerived,
 
-      grossMargin:     nOrNull(ratios.grossProfitMarginTTM),
-      operatingMargin: nOrNull(ratios.operatingProfitMarginTTM),
-      profitMargin:    nOrNull(ratios.netProfitMarginTTM),
-      fcfMargin:       fcfMarginCalc(),
+      grossMargin:     nOrNull(ratios.grossProfitMarginTTM)                ?? grossMarginDerived,
+      operatingMargin: nOrNull(ratios.operatingProfitMarginTTM)            ?? operatingMarginDerived,
+      profitMargin:    nOrNull(ratios.netProfitMarginTTM)                  ?? profitMarginDerived,
+      fcfMargin:       fcfMarginDerived,
 
-      roe:           nOrNull(keyMetrics.returnOnEquityTTM),
-      dividendYield: nOrNull(ratios.dividendYieldTTM),
+      roe:           nOrNull(keyMetrics.returnOnEquityTTM)                ?? roeDerived,
+      dividendYield: nOrNull(ratios.dividendYieldTTM)                     ?? divYieldDerived,
       beta:          nOrNull(profile.beta),
-      marketCap:     nOrNull(profile.marketCap),
+      marketCap:     nOrNull(mktCap),
       totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
       totalCash:     financials.length > 0 ? nOrNull(financials[financials.length - 1].cash) : null,
 
       financials,
     };
 
-    // Return even if only quote is available (financials may be empty for some tickers)
     if (!quote && financials.length === 0) {
       console.error(`[getStockData] No data at all for ${ticker}`);
       return null;
     }
 
-    return { quote, fundamentals, quoteRateLimited: false };
+    const result: StockData = { quote, fundamentals, quoteRateLimited: false };
+
+    // Cache result
+    _cache.set(cacheKey, { data: result, ts: Date.now() });
+    return result;
+
   } catch (error: any) {
-    console.error(`[getStockData] Exception for ${ticker}:`, error.message);
+    console.error(`[getStockData] Unhandled for ${ticker}:`, error.message);
     return null;
   }
 }
 
 export async function getFinancialData(
   symbol: string,
-  period: Period = 'annual'
+  period: Period = "annual"
 ): Promise<YahooFundamentals | null> {
   const data = await getStockData(symbol, period);
   return data?.fundamentals ?? null;
