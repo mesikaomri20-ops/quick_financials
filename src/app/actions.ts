@@ -163,14 +163,14 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 1500 ms between calls to avoid 429 bursts ─────
+    // ── Fully sequential with 2000 ms between calls to avoid 429 bursts ─────
     // Each call waits for the previous one before firing.
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(1500);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(1500);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(1500);
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(2000);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(2000);
+    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(2000);
     
     // Try to get company name from /quote to save hitting /profile
-    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(1500);
+    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(2000);
     const fmpQuote = fmpQuoteArr[0] ?? {};
     
     let profile: Record<string, any> = {};

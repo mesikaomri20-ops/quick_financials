@@ -38,11 +38,11 @@ export default function Home() {
   const [error, setError] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   // Prevent concurrent fetches (rapid toggle / double-click)
-  const fetchingRef = useRef(false);
+  const isSearching = useRef(false);
 
   const fetchData = async (symbol: string, p: Period) => {
-    if (fetchingRef.current) { console.log("[UI] fetch already in progress — skipping"); return; }
-    fetchingRef.current = true;
+    // If the useEffect triggered this but we are already fetching (and it wasn't locked by handleSearch just now),
+    // we should let it proceed ONLY if it's a new request that bypassed the button lock.
     setLoading(true);
     setError(false);
     setRateLimited(false);
@@ -59,7 +59,7 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
-      fetchingRef.current = false;
+      isSearching.current = false;
     }
   };
 
@@ -68,7 +68,10 @@ export default function Home() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSearching.current) return;
+    
     if (tickerInput.trim()) {
+      isSearching.current = true;
       setLoading(true); // Lock the UI button instantly to block double-clicks
       setCurrentTicker(tickerInput.trim().toUpperCase());
       setTickerInput("");
@@ -103,7 +106,7 @@ export default function Home() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
             ) : null}
-            {loading ? "Loading…" : "Search"}
+            {loading ? "Searching..." : "Search"}
           </button>
         </form>
       </div>
