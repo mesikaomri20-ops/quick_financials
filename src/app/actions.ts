@@ -1,4 +1,5 @@
 "use server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
@@ -337,3 +338,54 @@ export async function getFinancialData(
   const data = await getStockData(symbol, period);
   return data?.fundamentals ?? null;
 }
+
+// ─── Gemini AI Analysis ──────────────────────────────────────────────────
+
+const GEMINI_API_KEY = "AIzaSyDANuA5lLyvPspRPTEso5IzWPiH2OphWZI";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+export async function analyzeStock(data: StockData): Promise<string> {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    // Format a concise JSON payload to save tokens
+    const payload = {
+      symbol: data.quote?.symbol,
+      price: data.quote?.price,
+      fundamentals: {
+        trailingPE: data.fundamentals?.trailingPE,
+        forwardPE: data.fundamentals?.forwardPE,
+        roe: data.fundamentals?.roe,
+        grossMargin: data.fundamentals?.grossMargin,
+        profitMargin: data.fundamentals?.profitMargin,
+        totalDebt: data.fundamentals?.totalDebt,
+        totalCash: data.fundamentals?.totalCash,
+      },
+      // Keep only key metrics for trend analysis
+      financialHistory: data.fundamentals?.financials.map(f => ({
+        year: f.year,
+        revenue: f.revenue,
+        netIncome: f.netIncome,
+        freeCashFlow: f.freeCashFlow,
+        debt: f.debt,
+        grossProfit: f.grossProfit
+      }))
+    };
+
+    const prompt = `Act as a senior investment analyst at a top tier hedge fund. 
+I am providing you with the 5-year financial data for ${payload.symbol || "the company"}.
+Analyze the 5-year trends of Revenue, Margins, Debt, and ROE.
+
+Here is the data:
+${JSON.stringify(payload, null, 2)}
+
+Provide a concise, professional analysis in **Hebrew**. Use bullet points. Focus purely on assessing the financial health, growth trajectory, risks (e.g., debt levels), and overall quality of the business based strictly on the provided numbers. Do not give financial advice, just the hard analysis.`;
+
+    const result = await model.generateContent(prompt);
+    return result.response.text();
+  } catch (error: any) {
+    console.error("[analyzeStock] Failed:", error.message);
+    return "שגיאה ביצירת הניתוח. אנא נסה שוב מאוחר יותר.";
+  }
+}
+
