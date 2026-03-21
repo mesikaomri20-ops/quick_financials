@@ -21,11 +21,11 @@ export default function MultipliersPage() {
         </div>
       </header>
       
-      <main className="flex flex-col items-center justify-center min-h-[50vh] bg-card/30 border border-foreground/5 rounded-[3.5rem] shadow-3xl backdrop-blur-xl relative overflow-hidden group">
+      <main className="flex flex-col items-center justify-center min-h-[50vh] bg-card/30 border border-border-lux rounded-[3.5rem] shadow-3xl backdrop-blur-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-foreground/5 rounded-full filter blur-[120px] -mr-32 -mt-32 pointer-events-none group-hover:bg-foreground/10 transition-colors duration-1000"></div>
         
         <div className="text-center space-y-8 relative z-10 px-6">
-          <div className="w-24 h-24 bg-foreground/5 rounded-[2rem] flex items-center justify-center mx-auto mb-10 shadow-2xl border border-foreground/5 group-hover:scale-110 transition-transform duration-700">
+          <div className="w-24 h-24 bg-foreground/5 rounded-[2rem] flex items-center justify-center mx-auto mb-10 shadow-2xl border border-border-lux group-hover:scale-110 transition-transform duration-700">
             <Zap className="w-10 h-10 text-foreground/20 animate-pulse" />
           </div>
           <h2 className="text-4xl font-extralight tracking-tighter text-foreground leading-none">Intelligence Hub <span className="italic text-foreground/30">Sequencing</span></h2>

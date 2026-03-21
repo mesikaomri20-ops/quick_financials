@@ -142,13 +142,13 @@ export default function ValuationPage() {
                 placeholder="EX: AAPL, NVDA, GOOGL..." 
                 value={ticker}
                 onChange={(e) => setTicker(e.target.value.toUpperCase())}
-                className="bg-card/50 border border-foreground/5 rounded-2xl py-3.5 pl-12 pr-6 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all font-mono text-xs font-bold w-full lg:w-64 placeholder:opacity-30"
+                className="bg-card/50 border border-border-lux rounded-2xl py-3.5 pl-12 pr-6 outline-none focus:ring-2 focus:ring-accent-gold/20 transition-all font-mono text-xs font-bold w-full lg:w-64 placeholder:opacity-30"
             />
         </form>
       </header>
 
       {/* Tab Switcher */}
-      <div className="flex p-1.5 bg-foreground/5 border border-foreground/5 rounded-[2rem] mb-16 w-fit mx-auto lg:mx-0 backdrop-blur-sm">
+      <div className="flex p-1.5 bg-foreground/5 border border-border-lux rounded-[2rem] mb-16 w-fit mx-auto lg:mx-0 backdrop-blur-md">
           <button 
             onClick={() => setActiveTab("dcf")}
             className={`flex items-center gap-2 px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === 'dcf' ? 'bg-foreground text-background shadow-lg' : 'text-foreground/30 hover:text-foreground/60'}`}
@@ -173,49 +173,49 @@ export default function ValuationPage() {
             <div className="space-y-6">
                 {activeTab === 'dcf' ? (
                     <>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Current FCF (M$)</label>
                             <input type="number" value={fcf} onChange={(e) => setFcf(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Growth Velocity (%)</label>
                             <input type="number" value={growth} onChange={(e) => setGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Exit Mult (P/FCF)</label>
                             <input type="number" value={exitMultiple} onChange={(e) => setExitMultiple(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm text-center">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md text-center">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Capital Cost (WACC %)</label>
                             <input type="number" value={wacc} onChange={(e) => setWacc(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                         </div>
                     </>
                 ) : (
                     <>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Gross Revenue (M$)</label>
                             <input type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">CAGR Target (%)</label>
                             <input type="number" value={targetGrowth} onChange={(e) => setTargetGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
-                        <div className="bg-card/30 border border-foreground/5 p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-sm">
+                        <div className="bg-card/30 border border-border-lux p-8 rounded-[2rem] group hover:border-foreground/10 transition-all backdrop-blur-md">
                             <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-3 block group-hover:text-emerald-500/50 transition-colors">Op Margin (%)</label>
                             <input type="number" value={targetMargin} onChange={(e) => setTargetMargin(Number(e.target.value))} className="bg-transparent border-none outline-none text-3xl font-extralight tracking-tighter text-foreground w-full" />
                         </div>
 
                         {/* Triple P/E Inputs */}
                         <div className="grid grid-cols-3 gap-3">
-                            <div className="bg-card/30 border border-foreground/5 p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
+                            <div className="bg-card/30 border border-border-lux p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
                                 <label className="text-[8px] font-black text-foreground/20 uppercase tracking-[0.2em] mb-2 block">Bear_PE</label>
                                 <input type="number" value={peLow} onChange={(e) => setPeLow(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
-                            <div className="bg-foreground/5 border border-emerald-500/20 p-4 rounded-[1.5rem] text-center shadow-xl shadow-emerald-500/5">
-                                <label className="text-[8px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-2 block font-bold">Base_PE</label>
+                            <div className="bg-foreground/5 border border-accent-gold/20 p-4 rounded-[1.5rem] text-center shadow-xl shadow-accent-gold/5">
+                                <label className="text-[8px] font-black text-accent-gold uppercase tracking-[0.2em] mb-2 block font-bold">Base_PE</label>
                                 <input type="number" value={peMid} onChange={(e) => setPeMid(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
-                            <div className="bg-card/30 border border-foreground/5 p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
+                            <div className="bg-card/30 border border-border-lux p-4 rounded-[1.5rem] text-center hover:border-foreground/10 transition-all">
                                 <label className="text-[8px] font-black text-foreground/20 uppercase tracking-[0.2em] mb-2 block">Bull_PE</label>
                                 <input type="number" value={peHigh} onChange={(e) => setPeHigh(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-extralight tracking-tighter text-foreground w-full text-center" />
                             </div>
@@ -224,11 +224,11 @@ export default function ValuationPage() {
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div className="bg-card/30 border border-foreground/5 p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
+                    <div className="bg-card/30 border border-border-lux p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
                         <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-2 block group-hover:text-emerald-500/50 transition-colors">Spot Price</label>
                         <input type="number" value={currentPrice} onChange={(e) => setCurrentPrice(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                     </div>
-                    <div className="bg-card/30 border border-foreground/5 p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
+                    <div className="bg-card/30 border border-border-lux p-6 rounded-[2rem] text-center group hover:border-foreground/10 transition-all">
                         <label className="text-[9px] font-black text-foreground/20 uppercase tracking-[0.3em] mb-2 block group-hover:text-emerald-500/50 transition-colors">Floating Shares</label>
                         <input type="number" value={shares} onChange={(e) => setShares(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-extralight tracking-tighter text-foreground w-full text-center" />
                     </div>
@@ -246,7 +246,7 @@ export default function ValuationPage() {
             {activeTab === 'dcf' ? (
                 /* DCF RESULTS UI */
                 <>
-                    <div className="bg-card/40 backdrop-blur-2xl border border-foreground/5 p-10 md:p-16 rounded-[3.5rem] relative overflow-hidden group shadow-3xl">
+                    <div className="bg-card/40 backdrop-blur-2xl border border-border-lux p-10 md:p-16 rounded-[3.5rem] relative overflow-hidden group shadow-3xl">
                         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-emerald-500/5 rounded-full filter blur-[120px] -mr-32 -mt-32 pointer-events-none group-hover:bg-emerald-500/10 transition-colors duration-1000"></div>
                         <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-12">
                             <div>
@@ -258,12 +258,12 @@ export default function ValuationPage() {
                             </div>
                             <div className={`p-10 rounded-[2.5rem] border ${dcfResults.marginOfSafety > 0 ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-rose-500/5 border-rose-500/10'} flex flex-col items-center min-w-[220px] backdrop-blur-md shadow-xl`}>
                                 <span className="text-[9px] font-black text-foreground/30 uppercase tracking-[0.3em] mb-2">Safety_Margin</span>
-                                <span className={`text-6xl font-extralight tracking-tighter ${dcfResults.marginOfSafety > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{dcfResults.marginOfSafety.toFixed(1)}%</span>
+                                <span className={`text-6xl font-extralight tracking-tighter ${dcfResults.marginOfSafety > 0 ? 'text-accent-gold' : 'text-rose-500'}`}>{dcfResults.marginOfSafety.toFixed(1)}%</span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="overflow-hidden border border-foreground/5 rounded-[3rem] bg-card/20 backdrop-blur-sm shadow-2xl">
+                    <div className="overflow-hidden border border-border-lux rounded-[3rem] bg-card/20 backdrop-blur-md shadow-2xl">
                         <div className="overflow-x-auto">
                           <table className="w-full text-left font-mono">
                               <thead>
@@ -307,7 +307,7 @@ export default function ValuationPage() {
                             const borderClass = scenario === 'Pessimistic' ? 'group-hover:border-rose-500/20' : scenario === 'Neutral' ? 'group-hover:border-emerald-500/20' : 'group-hover:border-blue-500/20';
                             
                             return (
-                                <div key={scenario} className={`bg-card/30 backdrop-blur-md border border-foreground/5 p-10 rounded-[3rem] shadow-2xl transition-all duration-500 group relative overflow-hidden flex flex-col ${borderClass}`}>
+                                <div key={scenario} className={`bg-card/30 backdrop-blur-md border border-border-lux p-10 rounded-[3rem] shadow-2xl transition-all duration-500 group relative overflow-hidden flex flex-col ${borderClass}`}>
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-foreground/5 rounded-full filter blur-[60px] -mr-16 -mt-16 group-hover:bg-foreground/10 transition-all duration-700 pointer-events-none"></div>
                                     
                                     <span className="text-[10px] font-black text-foreground/20 uppercase tracking-[0.4em] mb-6 block z-10">{scenario}</span>
@@ -328,7 +328,7 @@ export default function ValuationPage() {
                         })}
                     </div>
 
-                    <div className="bg-card/40 backdrop-blur-xl border border-foreground/5 rounded-[3.5rem] p-12 shadow-3xl relative overflow-hidden group">
+                    <div className="bg-card/40 backdrop-blur-2xl border border-border-lux rounded-[3.5rem] p-12 shadow-3xl relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-96 h-96 bg-foreground/5 rounded-full filter blur-[120px] -mr-32 -mt-32 pointer-events-none group-hover:bg-foreground/10 transition-all duration-1000"></div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative z-10">
                             <div>
@@ -347,7 +347,7 @@ export default function ValuationPage() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="bg-foreground/5 backdrop-blur-md p-10 rounded-[2.5rem] border border-foreground/5 flex flex-col justify-center gap-6 shadow-xl">
+                            <div className="bg-card/10 backdrop-blur-md p-10 rounded-[2.5rem] border border-border-lux flex flex-col justify-center gap-6 shadow-xl">
                                 <p className="text-xs text-foreground/40 leading-relaxed uppercase tracking-[0.2em] font-black pr-8">
                                     Strategic earnings mapping based on compounded scaling and operational optimization. Synthetic forecasting is probabilistic.
                                 </p>

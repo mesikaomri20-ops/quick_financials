@@ -7,6 +7,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-border-lux: var(--border-lux);
   --color-accent-gold: #D4AF37;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -20,6 +21,7 @@
   --card-foreground: #050505;
   --sidebar: #F5F5F5;
   --sidebar-foreground: #050505;
+  --border-lux: rgba(0, 0, 0, 0.05);
 }
 
 .dark {
@@ -29,6 +31,7 @@
   --card-foreground: #FAFAFA;
   --sidebar: #0A0A0A;
   --sidebar-foreground: #FAFAFA;
+  --border-lux: rgba(255, 255, 255, 0.1);
 }
 
 body {
@@ -37,6 +40,11 @@ body {
   font-family: var(--font-sans);
   transition-property: background-color, color;
   transition-duration: 300ms;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 200;
+  letter-spacing: -0.02em;
 }
 
 @layer components {

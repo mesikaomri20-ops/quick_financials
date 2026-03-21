@@ -124,7 +124,7 @@ export default function Home() {
             onChange={(e) => setTickerInput(e.target.value)}
             placeholder="Search Ticker..."
             disabled={loading}
-            className="flex-1 px-5 py-3.5 bg-card/50 backdrop-blur-sm border border-foreground/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-foreground placeholder-foreground/30 transition-all font-medium tracking-wide shadow-sm disabled:opacity-50"
+            className="flex-1 px-5 py-3.5 bg-card/50 backdrop-blur-md border border-border-lux rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent-gold/30 text-foreground placeholder-foreground/30 transition-all font-medium tracking-wide shadow-sm disabled:opacity-50"
           />
           <button
             type="submit"
@@ -142,7 +142,7 @@ export default function Home() {
 
             {/* Quote Card */}
             {quote ? (
-              <div className="bg-card/40 backdrop-blur-xl border border-foreground/5 rounded-[2.5rem] shadow-2xl p-10 max-w-sm w-full mb-16 transform transition-all hover:scale-[1.01] duration-500 relative overflow-hidden group">
+              <div className="bg-card/40 backdrop-blur-2xl border border-border-lux rounded-[2.5rem] shadow-2xl p-10 max-w-sm w-full mb-16 transform transition-all hover:scale-[1.01] duration-500 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full filter blur-[80px] -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors duration-700 pointer-events-none"></div>
                 
                 <div className="flex justify-between items-start mb-8 relative z-10">
@@ -164,7 +164,7 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                  <span className="text-[9px] font-black text-foreground/30 px-3 py-1.5 bg-foreground/5 rounded-full uppercase tracking-[0.2em] border border-foreground/5">
+                  <span className="text-[9px] font-black text-foreground/30 px-3 py-1.5 bg-foreground/5 rounded-full uppercase tracking-[0.2em] border border-border-lux">
                     Terminal_Live
                   </span>
                 </div>
@@ -174,7 +174,7 @@ export default function Home() {
                     <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Market Price</span>
                     <span className="text-6xl font-extralight tracking-tighter">${quote.price.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between items-center pt-6 border-t border-foreground/5 mt-4">
+                  <div className="flex justify-between items-center pt-6 border-t border-border-lux mt-4">
                     <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em]">Volatility 24H</span>
                     <span className={`text-2xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {quote.changesPercentage > 0 ? "+" : ""}
@@ -191,9 +191,9 @@ export default function Home() {
                 
                 {/* Bloomberg style Header */}
                 <div className="flex items-center gap-4 mb-8">
-                   <div className="h-px bg-foreground/10 flex-1"></div>
+                   <div className="h-px bg-border-lux flex-1"></div>
                    <h2 className="text-xs font-black uppercase tracking-[0.4em] text-foreground/40">Core Financial Metrics</h2>
-                   <div className="h-px bg-foreground/10 flex-1"></div>
+                   <div className="h-px bg-border-lux flex-1"></div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -227,7 +227,7 @@ export default function Home() {
                      Financial <span className="text-accent-gold italic opacity-80">Trajectories</span>
                    </h2>
 
-                   <div className="flex p-1 bg-foreground/5 rounded-2xl border border-foreground/5 backdrop-blur-sm" dir="ltr">
+                   <div className="flex p-1 bg-foreground/5 rounded-2xl border border-border-lux backdrop-blur-sm" dir="ltr">
                     <button
                       onClick={() => setPeriod("annual")}
                       className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.1em] transition-all duration-300 ${
@@ -247,7 +247,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="bg-card/20 backdrop-blur-md border border-foreground/5 p-6 md:p-10 rounded-[3rem] shadow-2xl">
+                <div className="bg-card/20 backdrop-blur-xl border border-border-lux p-6 md:p-10 rounded-[3rem] shadow-2xl">
                    <FinancialCharts financials={fundamentals.financials || []} period={period} />
                 </div>
               </div>
@@ -265,7 +265,7 @@ function StatGroup({ title, color, children }: { title: string, color: string, c
     gold: "bg-amber-500"
   };
   return (
-    <div className="bg-card/30 backdrop-blur-sm border border-foreground/5 p-6 rounded-[2rem] hover:border-foreground/10 transition-all flex flex-col gap-4">
+    <div className="bg-card/30 backdrop-blur-md border border-border-lux p-6 rounded-[2rem] hover:border-foreground/10 transition-all flex flex-col gap-4">
        <div className="flex items-center gap-3 mb-2">
          <div className={`w-1 h-3 ${colorMap[color]} rounded-full opacity-50`}></div>
          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-foreground/40">{title}</h3>
@@ -503,7 +503,7 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
 
   // ── ChartCard ─────────────────────────────────────────────────────────────
   const ChartCard = ({ id, title }: { id: string; title: string }) => (
-    <div className="bg-gray-900/50 p-4 rounded-2xl border border-gray-800/60 shadow-md relative group">
+    <div className="bg-card/30 backdrop-blur-md p-4 rounded-2xl border border-border-lux shadow-md relative group">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-gray-200 font-bold bg-gray-800 px-3 py-1 rounded inline-block text-sm">{title}</h3>
         <button
