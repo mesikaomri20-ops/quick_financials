@@ -163,26 +163,19 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 1500 ms between calls to avoid 429 bursts ─────
-    // Each call waits for the previous one before firing.
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(1500);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(1500);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(1500);
+    // ── Fully sequential with 2000 ms between calls to avoid 429 bursts ─────
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(2000);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(2000);
     
-    // Try to get company name from /quote to save hitting /profile
-    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(1500);
+    // Try to get company name from /quote
+    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429);
     const fmpQuote = fmpQuoteArr[0] ?? {};
     
-    let profile: Record<string, any> = {};
-    if (!fmpQuote.name && !is429.value) {
-      profile = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
-    }
-
-    // Removed key-metrics and ratios-ttm fetching completely per user instruction to stop 429s.
+    // Removed cash-flow, key-metrics, ratios-ttm, and profile fetching per user instructions
+    const cashArr: any[] = [];
+    const profile: Record<string, any> = {};
     const ratios: Record<string, any> = {};
     const keyMetrics: Record<string, any> = {};
-
-    // Removed the abort on 429 so the UI still shows whatever data succeeded (if any).
 
     // ── Map statements to FinancialYearData ────────────────────────────────
     const yearMap = new Map<string, FinancialYearData>();
@@ -236,13 +229,13 @@ export async function getStockData(
     console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
 
     let quote: StockQuote | null = null;
-    if (n(fmpQuote.price) > 0 || n(profile.price) > 0) {
+    if (n(fmpQuote.price) > 0) {
       quote = { 
-        symbol: fmpQuote.symbol ?? profile.symbol ?? ticker, 
-        price: n(fmpQuote.price) || n(profile.price), 
-        changesPercentage: n(fmpQuote.changesPercentage) || n(profile.changePercentage),
-        companyName: fmpQuote.name || profile.companyName,
-        image: profile.image // only available if we hit profile
+        symbol: fmpQuote.symbol ?? ticker, 
+        price: n(fmpQuote.price), 
+        changesPercentage: n(fmpQuote.changesPercentage),
+        companyName: fmpQuote.name || ticker,
+        image: undefined // profile removed
       };
     } else {
       const yp = await yahooChartPrice(ticker);
@@ -270,8 +263,7 @@ export async function getStockData(
 
     const i0   = incomeArr[0]  ?? {};   // Most recent income row
     const b0   = balanceArr[0] ?? {};   // Most recent balance row
-    const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
-    const mktCap = n(fmpQuote.marketCap) || n(profile.marketCap);
+    const mktCap = n(fmpQuote.marketCap);
 
     // Manual calculation of margins from income statement
     const calcMargin = (numData: any, denData: any): number | null => {
@@ -290,7 +282,7 @@ export async function getStockData(
     const grossMarginDerived     = calcMargin(i0.grossProfit, i0.revenue);
     const operatingMarginDerived = calcMargin(i0.operatingIncome, i0.revenue);
     const profitMarginDerived    = calcMargin(i0.netIncome, i0.revenue);
-    const fcfMarginDerived       = calcMargin(c0.freeCashFlow, i0.revenue);
+    const fcfMarginDerived       = null; // fcf removed
 
     // ROE strictly: (Net Income / Total Stockholders Equity) * 100
     let roeDerived = null;
@@ -302,25 +294,16 @@ export async function getStockData(
 
     // Exact fields requested by User
     const currentPE = nOrNullSafe(fmpQuote.pe);
-    const forwardPE = nOrNullSafe(keyMetrics.forwardPeTTM) ?? nOrNullSafe(keyMetrics.forwardPe);
-    const peg = nOrNullSafe(ratios.pegRatioTTM) ?? nOrNullSafe(ratios.pegRatio);
-    const beta = nOrNullSafe(profile.beta) ?? nOrNullSafe(fmpQuote.beta);
+    const beta = nOrNullSafe(fmpQuote.beta);
 
-    // Derived P/FCF: marketCap / annual FCF (from balance + cash)
-    const annualFCF     = n(c0.freeCashFlow);
-    const pfcfDerived   = (mktCap > 0 && annualFCF > 0) ? mktCap / annualFCF : null;
-
-    // Dividend yield: profile.lastDividend / price
-    const price = n(fmpQuote.price) || n(profile.price);
-    const lastDiv       = n(profile.lastDividend);
-    const divYieldDerived = price > 0 ? (lastDiv / price) * 100 : null;
+    const divYieldDerived = null; // profile removed
 
     // Use derived metrics but merge APIs
     const fundamentals: YahooFundamentals = {
       trailingPE:      currentPE,
-      forwardPE:       forwardPE,
-      priceToCashFlow: pfcfDerived,
-      pegRatio:        peg,
+      forwardPE:       null,
+      priceToCashFlow: null,
+      pegRatio:        null,
 
       grossMargin:     grossMarginDerived,
       operatingMargin: operatingMarginDerived,
@@ -328,8 +311,8 @@ export async function getStockData(
       fcfMargin:       fcfMarginDerived,
 
       roe:           roeDerived,
-      dividendYield: divYieldDerived,
-      beta:          nOrNullSafe(profile.beta) ?? nOrNullSafe(fmpQuote.beta),
+      dividendYield: null,
+      beta:          nOrNullSafe(fmpQuote.beta),
       marketCap:     nOrNull(mktCap),
       totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
       totalCash:     financials.length > 0 ? nOrNull(financials[financials.length - 1].cash) : null,
@@ -342,7 +325,7 @@ export async function getStockData(
       return null;
     }
 
-    const result: StockData = { quote, fundamentals, quoteRateLimited: false };
+    const result: StockData = { quote: quote, fundamentals, quoteRateLimited: false };
 
     // Cache result
     _cache.set(cacheKey, { data: result, ts: Date.now() });
