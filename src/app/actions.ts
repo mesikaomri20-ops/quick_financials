@@ -1,7 +1,7 @@
 "use server";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const FMP_KEY  = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
+const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
 // ─── Module-level result cache (lives in warm serverless instance) ─────────
@@ -155,7 +155,7 @@ export async function getStockData(
   console.log(`[getStockData] Fetching ${ticker} (${period})…`);
 
   try {
-    const limit  = period === "quarter" ? "40" : "30"; // 30 annual years / 40 quarters (~10 yrs)
+    const limit  = "5"; // FMP free tier: max 5 records per endpoint
     const minLen = period === "quarter" ? 7 : 4;
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
