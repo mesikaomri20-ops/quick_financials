@@ -1,7 +1,7 @@
 "use server";
 
 // ─── Config ────────────────────────────────────────────────────────────────
-const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
+const FMP_KEY  = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
 const FMP_BASE = "https://financialmodelingprep.com/stable";
 
 // ─── Module-level result cache (lives in warm serverless instance) ─────────
@@ -163,14 +163,14 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 2000 ms between calls to avoid 429 bursts ─────
+    // ── Fully sequential with 1000 ms between calls to avoid 429 bursts ─────
     // Each call waits for the previous one before firing.
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(2000);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(2000);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(2000);
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(1000);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(1000);
+    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(1000);
     
     // Try to get company name from /quote to save hitting /profile
-    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(2000);
+    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(1000);
     const fmpQuote = fmpQuoteArr[0] ?? {};
     
     let profile: Record<string, any> = {};
