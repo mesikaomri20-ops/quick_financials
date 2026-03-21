@@ -7,6 +7,7 @@ export type StockQuote = {
   price: number;
   changesPercentage: number;
   companyName?: string;
+  name?: string;
   image?: string;
 };
 
@@ -76,6 +77,7 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
         price: q.price || 0,
         changesPercentage: q.changesPercentage || 0,
         companyName: q.name || q.symbol,
+        name: q.name || q.symbol
       },
       fundamentals: {
         trailingPE: q.pe || null,

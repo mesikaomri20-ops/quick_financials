@@ -46,10 +46,11 @@ export default function Home() {
     
     try {
       const result = await getStockData(symbol);
+      console.log('Search result received:', result);
       if (result) {
         setData(result);
+        console.log('Quote state updated:', result.quote);
       } else {
-        // If no data, we still clear error and show empty dash
         setData(null);
       }
     } catch (e) {
@@ -117,6 +118,14 @@ export default function Home() {
           </button>
         </form>
       </div>
+
+      <main className="w-full max-w-4xl flex flex-col items-center">
+        {quote ? (
+          <div className='p-8 text-white'>מצאתי נתונים עבור: {quote.name} - ${quote.price}</div>
+        ) : (
+          <div className='p-8 text-gray-500'>מחכה להזנת טיקר...</div>
+        )}
+      </main>
 
       {loading ? (
         <div className="w-full max-w-4xl flex flex-col items-center">
