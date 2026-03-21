@@ -42,19 +42,25 @@ export default function RootLayout({
               Dashboard (Overview)
             </a>
             
-            <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-gray-200 hover:bg-gray-800/30 transition-colors font-medium">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <span className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 bg-gray-900/50 cursor-not-allowed font-medium border border-transparent">
+              <svg className="w-5 h-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              Comparison
-            </a>
+              <div className="flex flex-col">
+                <span>Comparison</span>
+                <span className="text-[10px] text-gray-600 uppercase tracking-widest mt-0.5">Coming Soon</span>
+              </div>
+            </span>
             
-            <a href="#" className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-gray-200 hover:bg-gray-800/30 transition-colors font-medium">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <span className="flex items-center gap-3 px-4 py-3 rounded-xl text-gray-500 bg-gray-900/50 cursor-not-allowed font-medium border border-transparent">
+              <svg className="w-5 h-5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
               </svg>
-              Technical
-            </a>
+              <div className="flex flex-col">
+                <span>Technical</span>
+                <span className="text-[10px] text-gray-600 uppercase tracking-widest mt-0.5">Coming Soon</span>
+              </div>
+            </span>
           </nav>
           
           <div className="p-4 border-t border-gray-800 text-xs text-gray-600 font-mono text-center">

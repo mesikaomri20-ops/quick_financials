@@ -18,6 +18,7 @@ export type StockQuote = {
   price: number;
   changesPercentage: number;
   companyName?: string;
+  image?: string;
 };
 
 export type FinancialYearData = {
@@ -162,20 +163,14 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 500 ms between calls to avoid 429 bursts ─────
+    // ── Fully sequential with 800 ms between calls to avoid 429 bursts ─────
     // Each call waits for the previous one before firing.
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(500);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(500);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(500);
-    const profile    = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};   await sleep(500);
-    const ratios     = (await fmpSafe("/ratios-ttm",      { symbol: ticker }, is429))[0] ?? {}; await sleep(300);
-    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }, is429))[0] ?? {};
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(800);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(800);
+    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(800);
+    const profile    = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
 
-    // If ALL core calls returned nothing and we got 429s — tell the UI
-    if (is429.value && incomeArr.length === 0 && balanceArr.length === 0) {
-      console.error(`[FMP] Rate-limited for ${ticker} — returning rateLimited sentinel`);
-      return { quote: null, fundamentals: null, rateLimited: true };
-    }
+    // Removed the abort on 429 so the UI still shows whatever data succeeded (if any).
 
     // ── Map statements to FinancialYearData ────────────────────────────────
     const yearMap = new Map<string, FinancialYearData>();
@@ -228,14 +223,14 @@ export async function getStockData(
 
     console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
 
-    // ── Quote ──────────────────────────────────────────────────────────────
     let quote: StockQuote | null = null;
     if (n(profile.price) > 0) {
       quote = { 
         symbol: profile.symbol ?? ticker, 
         price: n(profile.price), 
         changesPercentage: n(profile.changePercentage),
-        companyName: profile.companyName
+        companyName: profile.companyName,
+        image: profile.image
       };
     } else {
       const yp = await yahooChartPrice(ticker);
@@ -276,7 +271,7 @@ export async function getStockData(
 
     // Derived PE: price / epsDiluted (from income statement)
     const epsDiluted    = n(i0.epsDiluted) || n(i0.eps);
-    const trailingPEDerived = (price > 0 && epsDiluted > 0) ? price / epsDiluted : null;
+    const trailingPEDerived = n(i0.epsdiluted) > 0 ? price / n(i0.epsdiluted) : null;
 
     // Derived P/FCF: marketCap / annual FCF (from balance + cash)
     const annualFCF     = n(c0.freeCashFlow);
@@ -284,35 +279,33 @@ export async function getStockData(
 
     // Dividend yield: profile.lastDividend / price
     const lastDiv       = n(profile.lastDividend);
-    const divYieldDerived = (price > 0 && lastDiv > 0) ? lastDiv / price : null;
+    const divYieldDerived = (n(profile.lastDiv) / price) * 100 || null;
 
     // Forward PE
-    const eps0 = epsDiluted;
-    const eps1 = n(incomeArr[1]?.epsDiluted) || n(incomeArr[1]?.eps);
-    const epsGrowth = (eps0 > 0 && eps1 > 0 && eps0 > eps1) ? (eps0 - eps1) / eps1 : 0;
-    const forwardPEDerived = (price > 0 && eps0 > 0)
-      ? price / (eps0 * (1 + epsGrowth))
-      : null;
+    const epsGrowth = incomeArr.length >= 2
+      ? ((n(incomeArr[0].epsdiluted) - n(incomeArr[1].epsdiluted)) / Math.abs(n(incomeArr[1].epsdiluted)))
+      : 0;
+    const forwardPEDerived = null;
 
     // PEG = trailingPE / epsGrowthPct (growth as percentage, e.g. 15 for 15%)
     const pegDerived = (trailingPEDerived && epsGrowth > 0)
       ? trailingPEDerived / (epsGrowth * 100)
       : null;
 
-    // Prefer TTM values from ratios/key-metrics if they came through (may be null/empty)
+    // Use only derived metrics to save API calls
     const fundamentals: YahooFundamentals = {
-      trailingPE:      nOrNull(ratios.priceToEarningsRatioTTM)             ?? trailingPEDerived,
+      trailingPE:      trailingPEDerived,
       forwardPE:       forwardPEDerived,
-      priceToCashFlow: nOrNull(ratios.priceToFreeCashFlowRatioTTM)         ?? pfcfDerived,
-      pegRatio:        nOrNull(ratios.priceToEarningsGrowthRatioTTM)       ?? pegDerived,
+      priceToCashFlow: pfcfDerived,
+      pegRatio:        pegDerived,
 
-      grossMargin:     nOrNull(ratios.grossProfitMarginTTM)                ?? grossMarginDerived,
-      operatingMargin: nOrNull(ratios.operatingProfitMarginTTM)            ?? operatingMarginDerived,
-      profitMargin:    nOrNull(ratios.netProfitMarginTTM)                  ?? profitMarginDerived,
+      grossMargin:     grossMarginDerived,
+      operatingMargin: operatingMarginDerived,
+      profitMargin:    profitMarginDerived,
       fcfMargin:       fcfMarginDerived,
 
-      roe:           nOrNull(keyMetrics.returnOnEquityTTM)                ?? roeDerived,
-      dividendYield: nOrNull(ratios.dividendYieldTTM)                     ?? divYieldDerived,
+      roe:           roeDerived,
+      dividendYield: divYieldDerived,
       beta:          nOrNull(profile.beta),
       marketCap:     nOrNull(mktCap),
       totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
