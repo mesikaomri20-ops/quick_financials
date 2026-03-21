@@ -277,20 +277,35 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     };
 
     const computeForwardPE = (): number | null => {
-      const price        = n(profile.price);
-      const earningsYield = n(ratios.earningsYieldTTM); // EPS_TTM / price
-      if (price <= 0 || earningsYield <= 0) return null;
+      const price = n(profile.price);
+      if (price <= 0) return null;
+
+      // earningsYieldTTM = EPS_TTM / price — lives in key-metrics-ttm, NOT ratios-ttm
+      const earningsYield = n(keyMetrics.earningsYieldTTM);
+      if (earningsYield <= 0) {
+        // Secondary fallback: derive from trailing PE + growth
+        const trailingPE = n(ratios.priceToEarningsRatioTTM);
+        if (trailingPE <= 0) return null;
+        const rev0 = n(incomeArr[0]?.revenue);
+        const rev1 = n(incomeArr[1]?.revenue);
+        if (rev0 <= 0 || rev1 <= 0) return null;
+        const growthRate = (rev0 - rev1) / rev1;
+        if (growthRate <= 0) return null;
+        return trailingPE / (1 + growthRate);
+      }
+
       const epsTTM = price * earningsYield;
-      // Estimate next-year EPS using YoY revenue growth as a proxy for earnings growth
+      // Apply YoY revenue growth as proxy for earnings growth
       const rev0 = n(incomeArr[0]?.revenue);
       const rev1 = n(incomeArr[1]?.revenue);
       const growthRate = (rev1 > 0 && rev0 > rev1) ? (rev0 - rev1) / rev1 : 0;
       const epsForward = epsTTM * (1 + growthRate);
       if (epsForward <= 0) return null;
       const fwdPE = price / epsForward;
-      console.log(`[FMP] Forward PE for ${ticker}: price=${price} epsTTM=${epsTTM.toFixed(2)} growth=${(growthRate*100).toFixed(1)}% fwdPE=${fwdPE.toFixed(1)}`);
+      console.log(`[FMP] Forward PE ${ticker}: earningsYield=${earningsYield.toFixed(4)} epsTTM=${epsTTM.toFixed(2)} growth=${(growthRate*100).toFixed(1)}% → fwdPE=${fwdPE.toFixed(1)}`);
       return fwdPE;
     };
+
 
     const fundamentals: YahooFundamentals = {
       trailingPE:      nOrNull(ratios.priceToEarningsRatioTTM),
