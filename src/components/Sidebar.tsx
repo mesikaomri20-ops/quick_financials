@@ -33,9 +33,12 @@ export default function Sidebar() {
 
   const login = async () => {
     try {
+      console.log("Starting Google Login...");
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed", error);
+      console.log("Login successful");
+    } catch (error: any) {
+      console.error("Login failed full error:", error);
+      alert("Login failed: " + (error.message || "Unknown error occurred"));
     }
   };
 
