@@ -155,7 +155,7 @@ export async function getStockData(
   console.log(`[getStockData] Fetching ${ticker} (${period})…`);
 
   try {
-    const limit  = period === "quarter" ? "5" : "5"; // max 5 for both — keep request small
+    const limit  = period === "quarter" ? "40" : "30"; // 30 annual years / 40 quarters (~10 yrs)
     const minLen = period === "quarter" ? 7 : 4;
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
