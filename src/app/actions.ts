@@ -26,6 +26,7 @@ export type FinancialYearData = {
   grossProfit: number;
   operatingIncome: number;
   netIncome: number;
+  researchAndDevelopment: number;
   totalAssets: number;
   totalLiabilities: number;
   totalEquity: number;
@@ -181,7 +182,7 @@ export async function getStockData(
     const ensure  = (label: string): FinancialYearData => {
       if (!yearMap.has(label)) yearMap.set(label, {
         year: label,
-        revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0,
+        revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0, researchAndDevelopment: 0,
         totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
         cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
       });
@@ -196,6 +197,7 @@ export async function getStockData(
       e.grossProfit     = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
       e.operatingIncome = n(row.operatingIncome) || n(row.ebit);
       e.netIncome       = n(row.netIncome);
+      e.researchAndDevelopment = n(row.researchAndDevelopmentExpenses);
     }
     for (const row of balanceArr) {
       const lbl = rowLabel(row, period);
@@ -346,7 +348,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export async function analyzeStock(data: StockData): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash" }, { apiVersion: 'v1' });
 
     // Format a concise JSON payload to save tokens
     const payload = {
@@ -368,13 +370,15 @@ export async function analyzeStock(data: StockData): Promise<string> {
         netIncome: f.netIncome,
         freeCashFlow: f.freeCashFlow,
         debt: f.debt,
-        grossProfit: f.grossProfit
+        grossProfit: f.grossProfit,
+        researchAndDevelopment: f.researchAndDevelopment
       }))
     };
 
     const prompt = `Act as a senior investment analyst at a top tier hedge fund. 
 I am providing you with the 5-year financial data for ${payload.symbol || "the company"}.
-Analyze the 5-year trends of Revenue, Margins, Debt, and ROE.
+Analyze the 5-year trends of Revenue, Margins, Debt, and ROE. 
+Since you are a highly intelligent financial model, please specifically look for non-obvious trends in the 5-year data, such as the relationship between R&D spending and future revenue growth, or hidden margin pressures.
 
 Here is the data:
 ${JSON.stringify(payload, null, 2)}
