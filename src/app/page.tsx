@@ -46,10 +46,8 @@ export default function Home() {
     
     try {
       const result = await getStockData(symbol);
-      console.log('Search result received:', result);
       if (result) {
         setData(result);
-        console.log('Quote state updated:', result.quote);
       } else {
         setData(null);
       }
@@ -119,181 +117,176 @@ export default function Home() {
         </form>
       </div>
 
-      <main className="w-full max-w-4xl flex flex-col items-center">
-        {quote ? (
-          <div className='p-8 text-white'>מצאתי נתונים עבור: {quote.name} - ${quote.price}</div>
-        ) : (
-          <div className='p-8 text-gray-500'>מחכה להזנת טיקר...</div>
-        )}
-      </main>
-
-      {loading ? (
-        <div className="w-full max-w-4xl flex flex-col items-center">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-sm w-full mb-8 min-h-[220px] flex items-center justify-center animate-pulse">
-            <div className="flex flex-col items-center space-y-4">
-              <div className="h-8 w-20 bg-gray-800 rounded"></div>
-              <div className="h-12 w-32 bg-gray-800 rounded"></div>
-              <div className="h-6 w-24 bg-gray-800 rounded"></div>
+      {/* Main Content Area */}
+      <div className="w-full max-w-4xl flex flex-col items-center">
+        {loading ? (
+          <div className="w-full max-w-4xl flex flex-col items-center">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-sm w-full mb-8 min-h-[220px] flex items-center justify-center animate-pulse">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="h-8 w-20 bg-gray-800 rounded"></div>
+                <div className="h-12 w-32 bg-gray-800 rounded"></div>
+                <div className="h-6 w-24 bg-gray-800 rounded"></div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full animate-pulse px-4 md:px-0">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-28 bg-gray-900 border border-gray-800 rounded-xl"></div>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full animate-pulse px-4 md:px-0">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-28 bg-gray-900 border border-gray-800 rounded-xl"></div>
-            ))}
-          </div>
-        </div>
-      ) : (
-        <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+        ) : (
+          <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
 
-          {/* Quote Card */}
-          {quote ? (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-sm w-full mb-12 transform transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
-              <div className="flex justify-between items-start mb-6 relative z-10">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-3">
-                    {quote.image && (
-                      /* eslint-disable-next-line @next/next/no-img-element */
-                      <img src={quote.image} alt="logo" className="w-10 h-10 rounded-full bg-white p-1 object-contain shadow-sm" />
-                    )}
-                    <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                      {quote.symbol}
-                    </h1>
-                  </div>
-                  {quote.companyName && (
-                    <div className="mt-3">
-                      <span className="text-xl font-bold text-gray-200 shadow-sm leading-tight block w-full pr-4" title={quote.companyName}>
-                        {quote.companyName}
-                      </span>
+            {/* Quote Card */}
+            {quote ? (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-8 max-w-sm w-full mb-12 transform transition-all hover:scale-[1.02] duration-300 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors duration-500 pointer-events-none"></div>
+                <div className="flex justify-between items-start mb-6 relative z-10">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-3">
+                      {quote.image && (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img src={quote.image} alt="logo" className="w-10 h-10 rounded-full bg-white p-1 object-contain shadow-sm" />
+                      )}
+                      <h1 className="text-4xl font-extrabold tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+                        {quote.symbol}
+                      </h1>
                     </div>
-                  )}
-                </div>
-                <span className="text-xs font-bold text-gray-400 px-3 py-1.5 bg-gray-800/80 rounded-lg uppercase tracking-wider shadow-inner">
-                  Quote
-                </span>
-              </div>
-              <div className="flex flex-col space-y-5 relative z-10">
-                <div className="flex justify-between items-end">
-                  <span className="text-gray-500 text-sm font-medium mb-1">Price</span>
-                  <span className="text-5xl font-black tracking-tight">${quote.price.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between items-center pt-3 border-t border-gray-800/50 mt-2">
-                  <span className="text-gray-500 text-sm font-medium">24h Change</span>
-                  <span className={`text-xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {quote.changesPercentage >= 0 ? (
-                      <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
-                      </svg>
+                    {quote.companyName && (
+                      <div className="mt-3">
+                        <span className="text-xl font-bold text-gray-200 shadow-sm leading-tight block w-full pr-4" title={quote.companyName}>
+                          {quote.companyName}
+                        </span>
+                      </div>
                     )}
-                    {quote.changesPercentage > 0 ? "+" : ""}
-                    {quote.changesPercentage.toFixed(2)}%
+                  </div>
+                  <span className="text-xs font-bold text-gray-400 px-3 py-1.5 bg-gray-800/80 rounded-lg uppercase tracking-wider shadow-inner">
+                    Quote
                   </span>
                 </div>
-              </div>
-            </div>
-          ) : data?.quoteRateLimited ? (
-            <div className="bg-gray-900 border-2 border-dashed border-rose-900/40 rounded-2xl p-6 max-w-sm w-full mb-12 flex flex-col items-center justify-center text-center shadow-lg">
-              <p className="text-gray-300 font-bold tracking-wide">Price server busy</p>
-              <p className="text-gray-500 text-sm mt-1">Showing fundamental data only</p>
-            </div>
-          ) : null}
-
-          {/* Fundamentals */}
-          {fundamentals && (
-            <div className="w-full mb-16 animate-in slide-in-from-bottom-5 duration-700" dir="rtl">
-
-              {/* Section A: Multipliers */}
-              <div className="mb-6 bg-gray-900/40 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-1 h-full bg-emerald-500/80"></div>
-                <h3 className="text-lg font-bold text-gray-200 mb-4 flex items-center">
-                  <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">מכפילים (Multipliers)</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <StatCard label="מכפיל רווח נוכחי" value={formatValue(fundamentals.trailingPE)} />
-                  <StatCard label="מכפיל רווח עתידי" value={formatValue(fundamentals.forwardPE)} />
-                  <StatCard label="מכפיל תזרים" value={formatValue(fundamentals.priceToCashFlow)} />
-                  <StatCard label="מכפיל PEG" value={formatValue(fundamentals.pegRatio)} />
+                <div className="flex flex-col space-y-5 relative z-10">
+                  <div className="flex justify-between items-end">
+                    <span className="text-gray-500 text-sm font-medium mb-1">Price</span>
+                    <span className="text-5xl font-black tracking-tight">${quote.price.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-800/50 mt-2">
+                    <span className="text-gray-500 text-sm font-medium">24h Change</span>
+                    <span className={`text-xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                      {quote.changesPercentage >= 0 ? (
+                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 17h8m0 0v-8m0 8l-8-8-4 4-6-6" />
+                        </svg>
+                      )}
+                      {quote.changesPercentage > 0 ? "+" : ""}
+                      {quote.changesPercentage.toFixed(2)}%
+                    </span>
+                  </div>
                 </div>
               </div>
+            ) : data?.quoteRateLimited ? (
+              <div className="bg-gray-900 border-2 border-dashed border-rose-900/40 rounded-2xl p-6 max-w-sm w-full mb-12 flex flex-col items-center justify-center text-center shadow-lg">
+                <p className="text-gray-300 font-bold tracking-wide">Price server busy</p>
+                <p className="text-gray-500 text-sm mt-1">Showing fundamental data only</p>
+              </div>
+            ) : null}
 
-              {/* Section B: Margins */}
-              <div className="mb-6 bg-gray-950/60 p-5 rounded-2xl border border-gray-800/40 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-1 h-full bg-blue-500/60"></div>
-                <h3 className="text-lg font-bold text-gray-200 mb-4">
-                  <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">שולי רווח ורווחיות (Margins)</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <StatCard label="שולי רווח גולמי"   value={formatValue(fundamentals.grossMargin, 'percent')} />
-                  <StatCard label="שולי רווח תפעולי" value={formatValue(fundamentals.operatingMargin, 'percent')} />
-                  <StatCard label="שולי רווח נקי"    value={formatValue(fundamentals.profitMargin, 'percent')} />
-                  <StatCard label="שולי תזרים חופשי" value={formatValue(fundamentals.fcfMargin, 'percent')} />
-                  <StatCard label="ROE"               value={formatValue(fundamentals.roe, 'percent')} />
+            {/* Fundamentals */}
+            {fundamentals && (
+              <div className="w-full mb-16 animate-in slide-in-from-bottom-5 duration-700" dir="rtl">
+
+                {/* Section A: Multipliers */}
+                <div className="mb-6 bg-gray-900/40 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-1 h-full bg-emerald-500/80"></div>
+                  <h3 className="text-lg font-bold text-gray-200 mb-4 flex items-center">
+                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">מכפילים (Multipliers)</span>
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <StatCard label="מכפיל רווח נוכחי" value={formatValue(fundamentals.trailingPE)} />
+                    <StatCard label="מכפיל רווח עתידי" value={formatValue(fundamentals.forwardPE)} />
+                    <StatCard label="מכפיל תזרים" value={formatValue(fundamentals.priceToCashFlow)} />
+                    <StatCard label="מכפיל PEG" value={formatValue(fundamentals.pegRatio)} />
+                  </div>
+                </div>
+
+                {/* Section B: Margins */}
+                <div className="mb-6 bg-gray-950/60 p-5 rounded-2xl border border-gray-800/40 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-1 h-full bg-blue-500/60"></div>
+                  <h3 className="text-lg font-bold text-gray-200 mb-4">
+                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">שולי רווח ורווחיות (Margins)</span>
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <StatCard label="שולי רווח גולמי"   value={formatValue(fundamentals.grossMargin, 'percent')} />
+                    <StatCard label="שולי רווח תפעולי" value={formatValue(fundamentals.operatingMargin, 'percent')} />
+                    <StatCard label="שולי רווח נקי"    value={formatValue(fundamentals.profitMargin, 'percent')} />
+                    <StatCard label="שולי תזרים חופשי" value={formatValue(fundamentals.fcfMargin, 'percent')} />
+                    <StatCard label="ROE"               value={formatValue(fundamentals.roe, 'percent')} />
+                  </div>
+                </div>
+
+                {/* Section C: Health */}
+                <div className="mb-6 bg-gray-900/30 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-1 h-full bg-purple-500/60"></div>
+                  <h3 className="text-lg font-bold text-gray-200 mb-4">
+                    <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">נתוני חברה וחוסן (Health)</span>
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <StatCard label="שווי שוק"    value={formatValue(fundamentals.marketCap, 'large')} prefix="$" />
+                    <StatCard label="סך חוב"       value={formatValue(fundamentals.totalDebt, 'large')} prefix="$" />
+                    <StatCard label="מזומנים"      value={formatValue(fundamentals.totalCash, 'large')} prefix="$" />
+                    <StatCard label="בטא (Beta)"   value={formatValue(fundamentals.beta)} />
+                    <StatCard label="אחוז דיבידנד" value={
+                      !fundamentals.dividendYield || fundamentals.dividendYield === 0
+                        ? "החברה לא מחלקת דיבידנד"
+                        : formatValue(fundamentals.dividendYield, 'percent')
+                    } />
+                  </div>
                 </div>
               </div>
+            )}
 
-              {/* Section C: Health */}
-              <div className="mb-6 bg-gray-900/30 p-5 rounded-2xl border border-gray-800/60 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-1 h-full bg-purple-500/60"></div>
-                <h3 className="text-lg font-bold text-gray-200 mb-4">
-                  <span className="bg-gray-800 text-gray-300 px-3 py-1 rounded-md text-sm font-semibold tracking-wide shadow-sm ml-3">נתוני חברה וחוסן (Health)</span>
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                  <StatCard label="שווי שוק"    value={formatValue(fundamentals.marketCap, 'large')} prefix="$" />
-                  <StatCard label="סך חוב"       value={formatValue(fundamentals.totalDebt, 'large')} prefix="$" />
-                  <StatCard label="מזומנים"      value={formatValue(fundamentals.totalCash, 'large')} prefix="$" />
-                  <StatCard label="בטא (Beta)"   value={formatValue(fundamentals.beta)} />
-                  <StatCard label="אחוז דיבידנד" value={
-                    !fundamentals.dividendYield || fundamentals.dividendYield === 0
-                      ? "החברה לא מחלקת דיבידנד"
-                      : formatValue(fundamentals.dividendYield, 'percent')
-                  } />
+            {/* Charts */}
+            {fundamentals && (
+              <div className="w-full px-4 md:px-0 mb-20 animate-in slide-in-from-bottom-6 duration-1000" dir="rtl">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-2xl font-bold text-gray-200 pr-4 border-r-4 border-emerald-500 bg-gray-900/40 py-2 rounded-l-xl shadow-sm font-sans">
+                    Financials &amp; Charts (דוחות פיננסיים)
+                  </h2>
+
+                  {/* Annual / Quarterly Toggle */}
+                  <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1 shadow-inner" dir="ltr">
+                    <button
+                      onClick={() => setPeriod("annual")}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                        period === "annual"
+                          ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      Annual
+                    </button>
+                    <button
+                      onClick={() => setPeriod("quarter")}
+                      className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
+                        period === "quarter"
+                          ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
+                          : "text-gray-400 hover:text-gray-200"
+                      }`}
+                    >
+                      Quarterly
+                    </button>
+                  </div>
                 </div>
+
+                <FinancialCharts financials={fundamentals.financials || []} period={period} />
               </div>
-            </div>
-          )}
-
-          {/* Charts */}
-          {fundamentals && (
-            <div className="w-full px-4 md:px-0 mb-20 animate-in slide-in-from-bottom-6 duration-1000" dir="rtl">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-200 pr-4 border-r-4 border-emerald-500 bg-gray-900/40 py-2 rounded-l-xl shadow-sm font-sans">
-                  Financials &amp; Charts (דוחות פיננסיים)
-                </h2>
-
-                {/* Annual / Quarterly Toggle */}
-                <div className="flex items-center bg-gray-900 border border-gray-800 rounded-xl p-1 shadow-inner" dir="ltr">
-                  <button
-                    onClick={() => setPeriod("annual")}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      period === "annual"
-                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
-                        : "text-gray-400 hover:text-gray-200"
-                    }`}
-                  >
-                    Annual
-                  </button>
-                  <button
-                    onClick={() => setPeriod("quarter")}
-                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                      period === "quarter"
-                        ? "bg-emerald-600 text-white shadow-md shadow-emerald-900/30"
-                        : "text-gray-400 hover:text-gray-200"
-                    }`}
-                  >
-                    Quarterly
-                  </button>
-                </div>
-              </div>
-
-              <FinancialCharts financials={fundamentals.financials || []} period={period} />
-            </div>
-          )}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
