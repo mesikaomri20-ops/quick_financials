@@ -1,5 +1,4 @@
 "use server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 const FMP_KEY  = "ME2f8HjzG4nnr47PKp0GAll7TkYrazJ7";
@@ -18,6 +17,7 @@ export type StockQuote = {
   symbol: string;
   price: number;
   changesPercentage: number;
+  companyName?: string;
 };
 
 export type FinancialYearData = {
@@ -231,7 +231,12 @@ export async function getStockData(
     // ── Quote ──────────────────────────────────────────────────────────────
     let quote: StockQuote | null = null;
     if (n(profile.price) > 0) {
-      quote = { symbol: profile.symbol ?? ticker, price: n(profile.price), changesPercentage: n(profile.changePercentage) };
+      quote = { 
+        symbol: profile.symbol ?? ticker, 
+        price: n(profile.price), 
+        changesPercentage: n(profile.changePercentage),
+        companyName: profile.companyName
+      };
     } else {
       const yp = await yahooChartPrice(ticker);
       if (yp) {
@@ -339,67 +344,5 @@ export async function getFinancialData(
 ): Promise<YahooFundamentals | null> {
   const data = await getStockData(symbol, period);
   return data?.fundamentals ?? null;
-}
-
-// ─── Gemini AI Analysis ──────────────────────────────────────────────────
-
-const GEMINI_API_KEY = "AIzaSyDANuA5lLyvPspRPTEso5IzWPiH2OphWZI";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-export async function analyzeStock(data: StockData): Promise<string> {
-  try {
-    let model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" }, { apiVersion: 'v1beta' });
-
-    // Format a concise JSON payload to save tokens
-    const payload = {
-      symbol: data.quote?.symbol,
-      price: data.quote?.price,
-      fundamentals: {
-        trailingPE: data.fundamentals?.trailingPE,
-        forwardPE: data.fundamentals?.forwardPE,
-        roe: data.fundamentals?.roe,
-        grossMargin: data.fundamentals?.grossMargin,
-        profitMargin: data.fundamentals?.profitMargin,
-        totalDebt: data.fundamentals?.totalDebt,
-        totalCash: data.fundamentals?.totalCash,
-      },
-      // Keep only key metrics for trend analysis
-      financialHistory: data.fundamentals?.financials.map(f => ({
-        year: f.year,
-        revenue: f.revenue,
-        netIncome: f.netIncome,
-        freeCashFlow: f.freeCashFlow,
-        debt: f.debt,
-        grossProfit: f.grossProfit,
-        researchAndDevelopment: f.researchAndDevelopment
-      }))
-    };
-
-    const prompt = `Act as a senior investment analyst at a top tier hedge fund. 
-I am providing you with the 5-year financial data for ${payload.symbol || "the company"}.
-Analyze the 5-year trends of Revenue, Margins, Debt, and ROE. 
-Since you are a highly intelligent financial model, please specifically look for non-obvious trends in the 5-year data, such as the relationship between R&D spending and future revenue growth, or hidden margin pressures.
-
-Here is the data:
-${JSON.stringify(payload, null, 2)}
-
-Provide a concise, professional analysis in **Hebrew**. Use bullet points. Focus purely on assessing the financial health, growth trajectory, risks (e.g., debt levels), and overall quality of the business based strictly on the provided numbers. Do not give financial advice, just the hard analysis.`;
-
-    console.log("[analyzeStock] Sending data to Gemini for analysis...");
-    
-    let result;
-    try {
-      result = await model.generateContent(prompt);
-    } catch (routeErr: any) {
-      console.warn("[analyzeStock] Flash failed/404, falling back to gemini-1.5-pro:", routeErr.message);
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" }, { apiVersion: 'v1beta' });
-      result = await model.generateContent(prompt);
-    }
-    
-    return result.response.text();
-  } catch (error: any) {
-    console.error("[analyzeStock] Failed:", error.message);
-    return "ה-AI כרגע בעומס, נסה שוב בעוד דקה";
-  }
 }
 
