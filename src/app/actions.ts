@@ -177,6 +177,9 @@ export async function getStockData(
     if (!fmpQuote.name && !is429.value) {
       profile = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
     }
+    await sleep(1000);
+    const ratios     = (await fmpSafe("/ratios-ttm",      { symbol: ticker }, is429))[0] ?? {}; await sleep(1000);
+    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }, is429))[0] ?? {};
 
     // Removed the abort on 429 so the UI still shows whatever data succeeded (if any).
 
@@ -269,21 +272,35 @@ export async function getStockData(
     const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
     const mktCap = n(fmpQuote.marketCap) || n(profile.marketCap);
 
+    // Helper to safely format ratios as percentages (caps at 1000% just in case of crazy anomalies, but prevents 4000%)
+    const toPct = (val: number | null | undefined): number | null => {
+      if (val == null || isNaN(val)) return null;
+      // FMP ratios are often decimals like 0.15 for 15%.
+      // If the absolute value is <= 2 (200%), it's almost certainly a decimal representation.
+      let asPct = Math.abs(val) <= 10 ? val * 100 : val; 
+      // Cap margins between -1000% and 1000% to avoid visual breakage
+      if (asPct > 1000) asPct = 1000;
+      if (asPct < -1000) asPct = -1000;
+      return asPct;
+    };
+
+    const nOrNullSafe = (val: any) => { const x = n(val); return x === 0 && !val ? null : x; }
+
     // Margins — derived
     // ... no changes to derived definitions
-    const grossMarginDerived     = (n(i0.revenue) > 0) ? (n(i0.grossProfit) / n(i0.revenue)) * 100 : null;
-    const operatingMarginDerived = (n(i0.revenue) > 0) ? (n(i0.operatingIncome) / n(i0.revenue)) * 100 : null;
-    const profitMarginDerived    = (n(i0.revenue) > 0) ? (n(i0.netIncome) / n(i0.revenue)) * 100 : null;
-    const fcfMarginDerived       = (n(i0.revenue) > 0) ? (n(c0.freeCashFlow) / n(i0.revenue)) * 100 : null;
+    const grossMarginDerived     = (n(i0.revenue) > 0) ? toPct(n(i0.grossProfit) / n(i0.revenue)) : null;
+    const operatingMarginDerived = (n(i0.revenue) > 0) ? toPct(n(i0.operatingIncome) / n(i0.revenue)) : null;
+    const profitMarginDerived    = (n(i0.revenue) > 0) ? toPct(n(i0.netIncome) / n(i0.revenue)) : null;
+    const fcfMarginDerived       = (n(i0.revenue) > 0) ? toPct(n(c0.freeCashFlow) / n(i0.revenue)) : null;
 
     // Derived ROE
     const tEq       = n(b0.totalStockholdersEquity) || n(b0.totalEquity);
-    const roeDerived = (tEq > 0) ? (n(i0.netIncome) / tEq) * 100 : null;
+    const roeDerived = (tEq > 0) ? toPct(n(i0.netIncome) / tEq) : null;
 
-    // Derived PE: price / epsDiluted (from income statement)
+    // Derived PE: price / epsDiluted (from income statement), but prefer fmpQuote
     const price = n(fmpQuote.price) || n(profile.price);
-    const epsDiluted    = n(i0.epsDiluted) || n(i0.eps);
-    const trailingPEDerived = n(i0.epsdiluted) > 0 ? price / n(i0.epsdiluted) : null;
+    const epsDiluted    = n(fmpQuote.eps) || n(i0.epsDiluted) || n(i0.eps);
+    let trailingPEDerived = n(fmpQuote.pe) || (epsDiluted > 0 ? price / epsDiluted : null);
 
     // Derived P/FCF: marketCap / annual FCF (from balance + cash)
     const annualFCF     = n(c0.freeCashFlow);
@@ -294,31 +311,37 @@ export async function getStockData(
     const divYieldDerived = price > 0 ? (lastDiv / price) * 100 : null;
 
     // Forward PE
-    const epsGrowth = incomeArr.length >= 2
-      ? ((n(incomeArr[0].epsdiluted) - n(incomeArr[1].epsdiluted)) / Math.abs(n(incomeArr[1].epsdiluted)))
-      : 0;
-    const forwardPEDerived = null;
+    let forwardPEDerived = nOrNullSafe(keyMetrics.peRatioTTM) ?? nOrNullSafe(keyMetrics.forwardPeTTM) ?? null;
+    if (!forwardPEDerived) {
+      const epsGrowth = incomeArr.length >= 2
+        ? ((n(incomeArr[0].epsdiluted) - n(incomeArr[1].epsdiluted)) / Math.abs(n(incomeArr[1].epsdiluted)))
+        : 0;
+      if (price > 0 && epsDiluted > 0 && epsGrowth > 0) {
+        forwardPEDerived = price / (epsDiluted * (1 + epsGrowth));
+      }
+    }
 
     // PEG = trailingPE / epsGrowthPct (growth as percentage, e.g. 15 for 15%)
-    const pegDerived = (trailingPEDerived && epsGrowth > 0)
-      ? trailingPEDerived / (epsGrowth * 100)
+    const epsGrowthVal = incomeArr.length >= 2 ? ((n(incomeArr[0].epsdiluted) - n(incomeArr[1].epsdiluted)) / Math.abs(n(incomeArr[1].epsdiluted))) : 0;
+    const pegDerived = (trailingPEDerived && epsGrowthVal > 0)
+      ? trailingPEDerived / (epsGrowthVal * 100)
       : null;
 
-    // Use only derived metrics to save API calls
+    // Use derived metrics but merge APIs
     const fundamentals: YahooFundamentals = {
-      trailingPE:      trailingPEDerived,
+      trailingPE:      nOrNullSafe(ratios.priceEarningsRatioTTM) ?? trailingPEDerived,
       forwardPE:       forwardPEDerived,
-      priceToCashFlow: pfcfDerived,
-      pegRatio:        pegDerived,
+      priceToCashFlow: nOrNullSafe(ratios.priceToFreeCashFlowsRatioTTM) ?? pfcfDerived,
+      pegRatio:        nOrNullSafe(ratios.priceEarningsToGrowthRatioTTM) ?? pegDerived,
 
-      grossMargin:     grossMarginDerived,
-      operatingMargin: operatingMarginDerived,
-      profitMargin:    profitMarginDerived,
+      grossMargin:     toPct(nOrNullSafe(ratios.grossProfitMarginTTM)) ?? grossMarginDerived,
+      operatingMargin: toPct(nOrNullSafe(ratios.operatingProfitMarginTTM)) ?? operatingMarginDerived,
+      profitMargin:    toPct(nOrNullSafe(ratios.netProfitMarginTTM)) ?? profitMarginDerived,
       fcfMargin:       fcfMarginDerived,
 
-      roe:           roeDerived,
-      dividendYield: divYieldDerived,
-      beta:          nOrNull(profile.beta),
+      roe:           toPct(nOrNullSafe(keyMetrics.roeTTM)) ?? roeDerived,
+      dividendYield: toPct(nOrNullSafe(ratios.dividendYieldTTM)) ?? divYieldDerived,
+      beta:          nOrNullSafe(profile.beta) ?? nOrNullSafe(fmpQuote.beta),
       marketCap:     nOrNull(mktCap),
       totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
       totalCash:     financials.length > 0 ? nOrNull(financials[financials.length - 1].cash) : null,
