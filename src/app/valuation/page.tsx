@@ -43,11 +43,11 @@ export default function ValuationPage() {
   const [exitMultiple, setExitMultiple] = useState<number>(20);
   const [wacc, setWacc] = useState<number>(9);
 
-  // 3-Year Target Specific Inputs
+  // 3-Year Target Specific Inputs - New Defaults
   const [targetGrowth, setTargetGrowth] = useState<number>(15);
   const [targetMargin, setTargetMargin] = useState<number>(20);
-  const [peLow, setPeLow] = useState<number>(15);
-  const [peMid, setPeMid] = useState<number>(20);
+  const [peLow, setPeLow] = useState<number>(12);
+  const [peMid, setPeMid] = useState<number>(18);
   const [peHigh, setPeHigh] = useState<number>(25);
 
   const handleSearch = (e: React.FormEvent) => {
@@ -173,53 +173,70 @@ export default function ValuationPage() {
             <div className="space-y-4">
                 {activeTab === 'dcf' ? (
                     <>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">Current FCF (M$)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current FCF (M$)</label>
                             <input type="number" value={fcf} onChange={(e) => setFcf(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">FCF Growth Rate (%)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">FCF Growth Rate (%)</label>
                             <input type="number" value={growth} onChange={(e) => setGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">Exit Multiple (P/FCF)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Exit Multiple (P/FCF)</label>
                             <input type="number" value={exitMultiple} onChange={(e) => setExitMultiple(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        </div>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all text-center">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">WACC (%)</label>
+                            <input type="number" value={wacc} onChange={(e) => setWacc(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" />
                         </div>
                     </>
                 ) : (
                     <>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">Current Revenue (M$)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current Revenue (M$)</label>
                             <input type="number" value={revenue} onChange={(e) => setRevenue(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">3Y Rev Growth (%)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">3Y Rev Growth (%)</label>
                             <input type="number" value={targetGrowth} onChange={(e) => setTargetGrowth(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
                         </div>
-                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">Target Net Margin (%)</label>
+                        <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                            <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Target Net Margin (%)</label>
                             <input type="number" value={targetMargin} onChange={(e) => setTargetMargin(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" />
+                        </div>
+
+                        {/* Triple P/E Inputs */}
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="bg-gray-900/40 border border-gray-800 p-4 rounded-xl text-center hover:border-emerald-500/30 transition-all">
+                                <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1 block">Bear P/E</label>
+                                <input type="number" value={peLow} onChange={(e) => setPeLow(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                            </div>
+                            <div className="bg-gray-900/40 border border-emerald-500/30 p-4 rounded-xl text-center shadow-lg shadow-emerald-500/5">
+                                <label className="text-[9px] font-black text-emerald-500 uppercase tracking-widest mb-1 block">Base P/E</label>
+                                <input type="number" value={peMid} onChange={(e) => setPeMid(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                            </div>
+                            <div className="bg-gray-900/40 border border-gray-800 p-4 rounded-xl text-center hover:border-emerald-500/30 transition-all">
+                                <label className="text-[9px] font-black text-gray-600 uppercase tracking-widest mb-1 block">Bull P/E</label>
+                                <input type="number" value={peHigh} onChange={(e) => setPeHigh(Number(e.target.value))} className="bg-transparent border-none outline-none text-lg font-black text-white w-full text-center" />
+                            </div>
                         </div>
                     </>
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block">WACC / PE Mid</label>
-                        <input type="number" value={activeTab === 'dcf' ? wacc : peMid} onChange={(e) => activeTab === 'dcf' ? setWacc(Number(e.target.value)) : setPeMid(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" />
-                    </div>
-                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center">
-                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block">Current Price</label>
+                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center group hover:border-emerald-500/30 transition-all">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">Current Price</label>
                         <input type="number" value={currentPrice} onChange={(e) => setCurrentPrice(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" />
+                    </div>
+                    <div className="bg-gray-900/40 border border-gray-800 p-5 rounded-2xl text-center group hover:border-emerald-500/30 transition-all">
+                        <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-1 block group-hover:text-emerald-500 transition-colors">Shares (M)</label>
+                        <input type="number" value={shares} onChange={(e) => setShares(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-white w-full text-center" placeholder="Shares" />
                     </div>
                 </div>
 
-                <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl">
-                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block">Shares / Market Cap (M$)</label>
-                    <div className="flex gap-4">
-                        <input type="number" value={shares} onChange={(e) => setShares(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-gray-400 w-1/2" placeholder="Shares" />
-                        <input type="number" value={marketCap} onChange={(e) => setMarketCap(Number(e.target.value))} className="bg-transparent border-none outline-none text-xl font-black text-gray-400 w-1/2" placeholder="Market Cap" />
-                    </div>
+                <div className="bg-gray-900/40 border border-gray-800 p-6 rounded-2xl group hover:border-emerald-500/30 transition-all">
+                    <label className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 block group-hover:text-emerald-500 transition-colors">Current Market Cap (M$)</label>
+                    <input type="number" value={marketCap} onChange={(e) => setMarketCap(Number(e.target.value))} className="bg-transparent border-none outline-none text-2xl font-black text-white w-full" placeholder="Market Cap" />
                 </div>
             </div>
         </div>
