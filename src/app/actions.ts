@@ -68,7 +68,9 @@ async function fmpSafe(path: string, params: Record<string, string>): Promise<an
   try {
     const qs = new URLSearchParams({ ...params, apikey: FMP_KEY });
     const url = `${FMP_BASE}${path}?${qs}`;
+    console.log('FMP URL:', url); // Server-side log
     const res = await fetch(url, { cache: "no-store" });
+    console.log('FMP Response Status:', res.status, 'Path:', path); // Server-side log
     if (!res.ok) return [];
     const json = await res.json();
     return Array.isArray(json) ? json : [];
@@ -105,7 +107,10 @@ export async function getStockData(
     const quoteArr   = await fmpSafe("/quote", { symbol: ticker });
     
     const fmpQuote = quoteArr[0] || {};
-    if (incomeArr.length === 0 && quoteArr.length === 0) return null;
+    if (incomeArr.length === 0 && quoteArr.length === 0) {
+      console.error(`[getStockData] All fetches failed for ${ticker}. Check FMP_KEY.`);
+      return { error: 'No data returned from FMP', symbol: ticker } as any;
+    }
 
     // 2. Map Statements
     const yearMap = new Map<string, FinancialYearData>();

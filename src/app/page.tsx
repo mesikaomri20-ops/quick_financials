@@ -53,20 +53,25 @@ export default function Home() {
         window.alert('Data arrived: ' + JSON.stringify(result));
       }
 
-      if (result) {
+      if (result && !('error' in result)) {
         // Array Check (extra safety for FMP-style responses)
         const safeData = Array.isArray(result) ? result[0] : result;
         setData(safeData);
         setQuoteState(safeData.quote);
       } else {
-        // Hardcoded Fallback for testing
+        // Hardcoded Fallback for testing or server-side error
         setData(null);
-        setQuoteState({ name: 'Test Mode', price: 999, symbol: 'TEST', changesPercentage: 1.5, companyName: 'Test Corporation' } as any);
+        setQuoteState({ 
+          name: result && 'error' in (result as any) ? (result as any).error : 'Test Mode', 
+          price: 999, 
+          symbol: 'TEST', 
+          changesPercentage: 1.5, 
+          companyName: 'No Data' 
+        } as any);
       }
     } catch (e) {
       console.error("Fetch failed:", e);
       setError(true);
-      // Catch-all fallback
       setQuoteState({ name: 'Error Fallback', price: 0, symbol: 'ERR', changesPercentage: 0 } as any);
     } finally {
       setLoading(false);
@@ -87,14 +92,17 @@ export default function Home() {
     if (globalIsFetching) return;
     
     if (tickerInput.trim()) {
-      globalIsFetching = true;
-      setLoading(true); // Lock the UI button instantly to block double-clicks
-      const newTicker = tickerInput.trim().toUpperCase();
-      setCurrentTicker(newTicker);
-      setTickerInput("");
-      
-      await fetchData(newTicker, period);
-      globalIsFetching = false;
+      try {
+        globalIsFetching = true;
+        setLoading(true);
+        const newTicker = tickerInput.trim().toUpperCase();
+        setCurrentTicker(newTicker);
+        setTickerInput("");
+        await fetchData(newTicker, period);
+      } finally {
+        setLoading(false);
+        globalIsFetching = false;
+      }
     }
   };
 
