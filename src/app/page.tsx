@@ -340,16 +340,18 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
       retained: row.retainedEarnings || 0,
     }));
 
-    const clamp = (val: number) => {
-      const res = val * 100;
-      return res > 100 ? 100 : res < -100 ? -100 : res;
+    const calcMarginUI = (metric: number, rev: number) => {
+      if (rev <= 0) return 0;
+      let res = (metric / rev) * 100;
+      if (res > 100 || res < -100) res = metric / rev;
+      return (res > 100 || res < -100) ? 0 : res;
     };
 
     master.forEach((m, idx) => {
-      m.grossMargin = m.rev > 0 ? clamp(m.gross / m.rev) : 0;
-      m.opMargin    = m.rev > 0 ? clamp(m.opInc  / m.rev) : 0;
-      m.netMargin   = m.rev > 0 ? clamp(m.netInc / m.rev) : 0;
-      m.fcfMargin   = m.rev > 0 ? clamp(m.fcf    / m.rev) : 0;
+      m.grossMargin = calcMarginUI(m.gross, m.rev);
+      m.opMargin    = calcMarginUI(m.opInc, m.rev);
+      m.netMargin   = calcMarginUI(m.netInc, m.rev);
+      m.fcfMargin   = calcMarginUI(m.fcf, m.rev);
       if (idx === 0) return;
       const p = master[idx - 1];
       m.revYoY      = p.rev    ? ((m.rev    - p.rev)    / Math.abs(p.rev))    * 100 : 0;

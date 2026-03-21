@@ -272,12 +272,16 @@ export async function getStockData(
     const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
     const mktCap = n(fmpQuote.marketCap) || n(profile.marketCap);
 
-    // Helper to strictly clamp margins to [-100, 100] per user request
+    // Helper to strictly clamp margins to [-100, 100] per user request with decimal fallback
     const calcMargin = (metric: any, rev: any): number | null => {
       const num = n(metric);
       const den = n(rev);
       if (den <= 0) return null;
-      const res = (num / den) * 100;
+      let res = (num / den) * 100;
+      // If result is huge, FMP likely provided the raw percentage as an integer initially
+      if (res > 100 || res < -100) {
+        res = num / den; // retry without * 100
+      }
       if (res > 100 || res < -100) return null; // Likely an API error as per user constraints
       return res;
     };
@@ -290,11 +294,12 @@ export async function getStockData(
     const profitMarginDerived    = calcMargin(i0.netIncome, i0.revenue);
     const fcfMarginDerived       = calcMargin(c0.freeCashFlow, i0.revenue);
 
-    // Derived ROE
-    const tEq       = n(b0.totalStockholdersEquity) || n(b0.totalEquity);
+    // Derived ROE (Strictly totalStockholdersEquity)
+    const tEq       = n(b0.totalStockholdersEquity);
     let roeDerived = null;
     if (tEq > 0) {
-      const res = (n(i0.netIncome) / tEq) * 100;
+      let res = (n(i0.netIncome) / tEq) * 100;
+      if (res > 100 || res < -100) res = n(i0.netIncome) / tEq;
       roeDerived = (res > 100 || res < -100) ? null : res;
     }
 
@@ -302,7 +307,7 @@ export async function getStockData(
     const currentPE = nOrNullSafe(fmpQuote.pe);
     const forwardPE = nOrNullSafe(keyMetrics.forwardPeTTM) ?? nOrNullSafe(keyMetrics.forwardPe);
     const peg = nOrNullSafe(ratios.pegRatioTTM) ?? nOrNullSafe(ratios.pegRatio);
-    const beta = nOrNullSafe(profile.beta);
+    const beta = nOrNullSafe(profile.beta) ?? nOrNullSafe(fmpQuote.beta);
 
     // Derived P/FCF: marketCap / annual FCF (from balance + cash)
     const annualFCF     = n(c0.freeCashFlow);
