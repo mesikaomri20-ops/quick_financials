@@ -340,11 +340,16 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
       retained: row.retainedEarnings || 0,
     }));
 
+    const clamp = (val: number) => {
+      const res = val * 100;
+      return res > 100 ? 100 : res < -100 ? -100 : res;
+    };
+
     master.forEach((m, idx) => {
-      m.grossMargin = m.rev > 0 ? (m.gross  / m.rev) * 100 : 0;
-      m.opMargin    = m.rev > 0 ? (m.opInc  / m.rev) * 100 : 0;
-      m.netMargin   = m.rev > 0 ? (m.netInc / m.rev) * 100 : 0;
-      m.fcfMargin   = m.rev > 0 ? (m.fcf    / m.rev) * 100 : 0;
+      m.grossMargin = m.rev > 0 ? clamp(m.gross / m.rev) : 0;
+      m.opMargin    = m.rev > 0 ? clamp(m.opInc  / m.rev) : 0;
+      m.netMargin   = m.rev > 0 ? clamp(m.netInc / m.rev) : 0;
+      m.fcfMargin   = m.rev > 0 ? clamp(m.fcf    / m.rev) : 0;
       if (idx === 0) return;
       const p = master[idx - 1];
       m.revYoY      = p.rev    ? ((m.rev    - p.rev)    / Math.abs(p.rev))    * 100 : 0;
@@ -366,6 +371,7 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
 
   const fm = (val: number) => {
     if (val === 0) return "0";
+    if (Math.abs(val) >= 1e12) return (val / 1e12).toFixed(1) + "T";
     if (Math.abs(val) >= 1e9) return (val / 1e9).toFixed(1) + "B";
     if (Math.abs(val) >= 1e6) return (val / 1e6).toFixed(1) + "M";
     return val.toLocaleString();
