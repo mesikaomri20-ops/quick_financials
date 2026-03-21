@@ -57,17 +57,15 @@ export type StockData = {
   quote: StockQuote | null;
   fundamentals: YahooFundamentals | null;
   quoteRateLimited?: boolean;
+  rateLimited?: boolean;   // true when FMP returned 429
 };
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-const n = (val: any): number => {
-  if (val === null || val === undefined || val === "" || val === "N/A") return 0;
-  const num = Number(val);
-  return isNaN(num) ? 0 : num;
-};
+const n       = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
 const nOrNull = (val: any): number | null => { const v = n(val); return v === 0 ? null : v; };
 const pct     = (num: number, den: number): number | null => den > 0 ? num / den : null;
+const sleep   = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 // ─── FMP Fetch ─────────────────────────────────────────────────────────────
 
@@ -92,10 +90,18 @@ async function fmpGet(path: string, params: Record<string, string>): Promise<any
   return json;
 }
 
-/** Try fmpGet; return [] on failure so callers don't crash. */
-async function fmpSafe(path: string, params: Record<string, string>): Promise<any[]> {
+/** Try fmpGet; return [] on failure. Sets is429 flag if HTTP 429. */
+async function fmpSafe(
+  path: string,
+  params: Record<string, string>,
+  is429: { value: boolean }
+): Promise<any[]> {
   try { return await fmpGet(path, params); }
-  catch (e: any) { console.warn(`[FMP] ${path} failed (safe):`, e.message); return []; }
+  catch (e: any) {
+    if (e.message?.includes("429")) is429.value = true;
+    console.warn(`[FMP] ${path} failed:`, e.message);
+    return [];
+  }
 }
 
 /** Yahoo /chart for price — no auth, not blocked. */
@@ -149,39 +155,25 @@ export async function getStockData(
   console.log(`[getStockData] Fetching ${ticker} (${period})…`);
 
   try {
-    const limit  = period === "quarter" ? "20" : "5";
+    const limit  = period === "quarter" ? "5" : "5"; // max 5 for both — keep request small
     const minLen = period === "quarter" ? 7 : 4;
     const stmtP  = { symbol: ticker, period, limit };
+    const is429  = { value: false }; // shared 429 sentinel
 
-    // ── TIER 1: Core statements + profile — always parallel (4 calls) ──────
-    // These are essential. We compute ALL possible ratios from this data alone
-    // so that the dashboard always renders even if Tier 2 is rate-limited.
-    const [incomeRaw, balanceRaw, cashRaw, profileRaw] = await Promise.allSettled([
-      fmpGet("/income-statement",        stmtP),
-      fmpGet("/balance-sheet-statement", stmtP),
-      fmpGet("/cash-flow-statement",     stmtP),
-      fmpGet("/profile",                 { symbol: ticker }),
-    ]);
+    // ── Fully sequential with 500 ms between calls to avoid 429 bursts ─────
+    // Each call waits for the previous one before firing.
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(500);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(500);
+    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(500);
+    const profile    = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};   await sleep(500);
+    const ratios     = (await fmpSafe("/ratios-ttm",      { symbol: ticker }, is429))[0] ?? {}; await sleep(300);
+    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }, is429))[0] ?? {};
 
-    const incomeArr:  any[] = incomeRaw.status  === "fulfilled" ? incomeRaw.value       : [];
-    const balanceArr: any[] = balanceRaw.status === "fulfilled" ? balanceRaw.value      : [];
-    const cashArr:    any[] = cashRaw.status    === "fulfilled" ? cashRaw.value         : [];
-    const profile:    any   = profileRaw.status === "fulfilled" ? (profileRaw.value[0] ?? {}) : {};
-
-    if (incomeRaw.status  === "rejected") console.error("[FMP] income failed:",  (incomeRaw  as any).reason?.message);
-    if (balanceRaw.status === "rejected") console.error("[FMP] balance failed:", (balanceRaw as any).reason?.message);
-    if (cashRaw.status    === "rejected") console.error("[FMP] cash failed:",    (cashRaw    as any).reason?.message);
-
-    if (incomeArr.length > 0) console.log("[FMP] income[0]:", JSON.stringify(incomeArr[0]));
-
-    // ── TIER 2: Enrichment — sequential with breathing room, safe fallback ─
-    // Only for PE multiples and dividend yield we can't derive from statements.
-    // 200 ms gap between calls to avoid 429 bursts.
-    await new Promise(r => setTimeout(r, 200));
-    const ratios = (await fmpSafe("/ratios-ttm", { symbol: ticker }))[0] ?? {};
-
-    await new Promise(r => setTimeout(r, 200));
-    const keyMetrics = (await fmpSafe("/key-metrics-ttm", { symbol: ticker }))[0] ?? {};
+    // If ALL core calls returned nothing and we got 429s — tell the UI
+    if (is429.value && incomeArr.length === 0 && balanceArr.length === 0) {
+      console.error(`[FMP] Rate-limited for ${ticker} — returning rateLimited sentinel`);
+      return { quote: null, fundamentals: null, rateLimited: true };
+    }
 
     // ── Map statements to FinancialYearData ────────────────────────────────
     const yearMap = new Map<string, FinancialYearData>();

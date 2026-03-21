@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { getStockData, type StockData, type Period } from "./actions";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -36,18 +36,31 @@ export default function Home() {
   const [data, setData] = useState<StockData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [rateLimited, setRateLimited] = useState(false);
+  // Prevent concurrent fetches (rapid toggle / double-click)
+  const fetchingRef = useRef(false);
 
   const fetchData = async (symbol: string, p: Period) => {
+    if (fetchingRef.current) { console.log("[UI] fetch already in progress — skipping"); return; }
+    fetchingRef.current = true;
     setLoading(true);
     setError(false);
-    const result = await getStockData(symbol, p);
-    if (result && (result.quote || result.fundamentals)) {
-      setData(result);
-    } else {
-      setData(null);
-      setError(true);
+    setRateLimited(false);
+    try {
+      const result = await getStockData(symbol, p);
+      if (result?.rateLimited) {
+        setRateLimited(true);
+        setData(null);
+      } else if (result && (result.quote || result.fundamentals)) {
+        setData(result);
+      } else {
+        setData(null);
+        setError(true);
+      }
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
     }
-    setLoading(false);
   };
 
   // Re-fetch when ticker OR period changes
@@ -75,13 +88,21 @@ export default function Home() {
             value={tickerInput}
             onChange={(e) => setTickerInput(e.target.value)}
             placeholder="Search ticker (e.g. NVDA)"
-            className="flex-1 px-4 py-3 bg-gray-900 border border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-white placeholder-gray-500 transition-all font-medium tracking-wide shadow-sm"
+            disabled={loading}
+            className="flex-1 px-4 py-3 bg-gray-900 border border-gray-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/50 text-white placeholder-gray-500 transition-all font-medium tracking-wide shadow-sm disabled:opacity-50"
           />
           <button
             type="submit"
-            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-xl transition-colors shadow-lg shadow-emerald-900/20"
+            disabled={loading}
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors shadow-lg shadow-emerald-900/20 flex items-center gap-2"
           >
-            Search
+            {loading ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            ) : null}
+            {loading ? "Loading…" : "Search"}
           </button>
         </form>
       </div>
@@ -100,6 +121,14 @@ export default function Home() {
               <div key={i} className="h-28 bg-gray-900 border border-gray-800 rounded-xl"></div>
             ))}
           </div>
+        </div>
+      ) : rateLimited ? (
+        <div className="text-amber-400 bg-amber-950/30 p-6 rounded-2xl border border-amber-900 max-w-md w-full text-center mt-8 shadow-xl">
+          <svg className="w-10 h-10 mx-auto mb-3 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="font-bold text-lg">Rate limit reached</p>
+          <p className="text-sm mt-2 text-amber-500/80">FMP API returned 429. Please wait 1 minute and try again.</p>
         </div>
       ) : error || (!quote && !fundamentals) ? (
         <div className="text-red-400 bg-red-950/30 p-6 rounded-2xl border border-red-900 max-w-md w-full text-center mt-8 shadow-xl">
