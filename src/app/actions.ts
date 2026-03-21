@@ -136,37 +136,42 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
   try {
     // ── 1. Parallel fetch of all FMP endpoints ────────────────────────────────
     // Verified field names from live /stable/ responses (2025-03-21):
-    //   income:  fiscalYear, revenue, grossProfit, operatingIncome, netIncome
-    //   balance: fiscalYear, totalAssets, totalLiabilities, totalStockholdersEquity,
-    //            cashAndCashEquivalents, totalDebt, retainedEarnings
-    //   cash:    fiscalYear, operatingCashFlow, freeCashFlow, capitalExpenditure
-    //   profile: price, changePercentage, marketCap, beta, lastDividend
-    //   ratios:  priceToEarningsRatioTTM, priceToFreeCashFlowRatioTTM,
-    //            priceToEarningsGrowthRatioTTM, grossProfitMarginTTM,
-    //            operatingProfitMarginTTM, netProfitMarginTTM, dividendYieldTTM
+    //   income:      fiscalYear, revenue, grossProfit, operatingIncome, netIncome
+    //   balance:     fiscalYear, totalAssets, totalLiabilities, totalStockholdersEquity,
+    //                cashAndCashEquivalents, totalDebt, retainedEarnings
+    //   cash:        fiscalYear, operatingCashFlow, freeCashFlow, capitalExpenditure
+    //   profile:     price, changePercentage, marketCap, beta
+    //   ratios-ttm:  priceToEarningsRatioTTM, priceToFreeCashFlowRatioTTM,
+    //                priceToEarningsGrowthRatioTTM, grossProfitMarginTTM,
+    //                operatingProfitMarginTTM, netProfitMarginTTM, dividendYieldTTM,
+    //                earningsYieldTTM
+    //   key-metrics: returnOnEquityTTM  ← ROE lives here, not in ratios-ttm
     const params = (limit = 5) => ({ symbol: ticker, limit: String(limit) });
 
-    const [incomeRaw, balanceRaw, cashRaw, profileRaw, ratiosRaw] =
+    const [incomeRaw, balanceRaw, cashRaw, profileRaw, ratiosRaw, keyMetricsRaw] =
       await Promise.allSettled([
         fmpGet("/income-statement",        params()),
         fmpGet("/balance-sheet-statement", params()),
         fmpGet("/cash-flow-statement",     params()),
         fmpGet("/profile",                 { symbol: ticker }),
         fmpGet("/ratios-ttm",              { symbol: ticker }),
+        fmpGet("/key-metrics-ttm",         { symbol: ticker }),
       ]);
 
-    const incomeArr:  any[] = incomeRaw.status  === "fulfilled" ? incomeRaw.value  : [];
-    const balanceArr: any[] = balanceRaw.status === "fulfilled" ? balanceRaw.value : [];
-    const cashArr:    any[] = cashRaw.status    === "fulfilled" ? cashRaw.value    : [];
-    const profile:    any   = profileRaw.status === "fulfilled" ? (profileRaw.value[0] ?? {}) : {};
-    const ratios:     any   = ratiosRaw.status  === "fulfilled" ? (ratiosRaw.value[0]  ?? {}) : {};
+    const incomeArr:   any[] = incomeRaw.status     === "fulfilled" ? incomeRaw.value          : [];
+    const balanceArr:  any[] = balanceRaw.status    === "fulfilled" ? balanceRaw.value         : [];
+    const cashArr:     any[] = cashRaw.status       === "fulfilled" ? cashRaw.value            : [];
+    const profile:     any   = profileRaw.status    === "fulfilled" ? (profileRaw.value[0]    ?? {}) : {};
+    const ratios:      any   = ratiosRaw.status     === "fulfilled" ? (ratiosRaw.value[0]     ?? {}) : {};
+    const keyMetrics:  any   = keyMetricsRaw.status === "fulfilled" ? (keyMetricsRaw.value[0] ?? {}) : {};
 
     // Log failures and first-row samples for debugging
-    if (incomeRaw.status  === "rejected") console.error("[FMP] income-statement failed:",  (incomeRaw  as any).reason?.message);
-    if (balanceRaw.status === "rejected") console.error("[FMP] balance-sheet failed:",      (balanceRaw as any).reason?.message);
-    if (cashRaw.status    === "rejected") console.error("[FMP] cash-flow failed:",          (cashRaw    as any).reason?.message);
-    if (profileRaw.status === "rejected") console.error("[FMP] profile failed:",            (profileRaw as any).reason?.message);
-    if (ratiosRaw.status  === "rejected") console.error("[FMP] ratios-ttm failed:",         (ratiosRaw  as any).reason?.message);
+    if (incomeRaw.status     === "rejected") console.error("[FMP] income-statement failed:",  (incomeRaw     as any).reason?.message);
+    if (balanceRaw.status    === "rejected") console.error("[FMP] balance-sheet failed:",      (balanceRaw    as any).reason?.message);
+    if (cashRaw.status       === "rejected") console.error("[FMP] cash-flow failed:",          (cashRaw       as any).reason?.message);
+    if (profileRaw.status    === "rejected") console.error("[FMP] profile failed:",            (profileRaw    as any).reason?.message);
+    if (ratiosRaw.status     === "rejected") console.error("[FMP] ratios-ttm failed:",         (ratiosRaw     as any).reason?.message);
+    if (keyMetricsRaw.status === "rejected") console.error("[FMP] key-metrics-ttm failed:",    (keyMetricsRaw as any).reason?.message);
 
     if (incomeArr.length  > 0) console.log("[FMP] Income sample:",  JSON.stringify(incomeArr[0]));
     if (balanceArr.length > 0) console.log("[FMP] Balance sample:", JSON.stringify(balanceArr[0]));
@@ -257,9 +262,12 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       }
     }
 
-    // ── 4. Fundamentals from FMP ratios-ttm + profile ────────────────────────
-    // Field names verified from live /stable/ratios-ttm response 2025-03-21
-    const lastCash = cashArr[0];  // most recent year for FCF margin
+    // ── 4. Fundamentals from FMP ratios-ttm + key-metrics-ttm + profile ────────
+    // ROE:        key-metrics-ttm → returnOnEquityTTM  (ratios-ttm does NOT have it)
+    // Forward PE: derived — price ÷ (TTM EPS × (1 + YoY revenue growth))
+    //             TTM EPS  = price × earningsYieldTTM  (from ratios-ttm)
+    //             growthRate = (revenue_yr0 - revenue_yr1) / revenue_yr1  (from income)
+    const lastCash = cashArr[0];
 
     const fcfMarginCalc = (): number | null => {
       const fcf = n(lastCash?.freeCashFlow);
@@ -268,9 +276,25 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       return null;
     };
 
+    const computeForwardPE = (): number | null => {
+      const price        = n(profile.price);
+      const earningsYield = n(ratios.earningsYieldTTM); // EPS_TTM / price
+      if (price <= 0 || earningsYield <= 0) return null;
+      const epsTTM = price * earningsYield;
+      // Estimate next-year EPS using YoY revenue growth as a proxy for earnings growth
+      const rev0 = n(incomeArr[0]?.revenue);
+      const rev1 = n(incomeArr[1]?.revenue);
+      const growthRate = (rev1 > 0 && rev0 > rev1) ? (rev0 - rev1) / rev1 : 0;
+      const epsForward = epsTTM * (1 + growthRate);
+      if (epsForward <= 0) return null;
+      const fwdPE = price / epsForward;
+      console.log(`[FMP] Forward PE for ${ticker}: price=${price} epsTTM=${epsTTM.toFixed(2)} growth=${(growthRate*100).toFixed(1)}% fwdPE=${fwdPE.toFixed(1)}`);
+      return fwdPE;
+    };
+
     const fundamentals: YahooFundamentals = {
       trailingPE:      nOrNull(ratios.priceToEarningsRatioTTM),
-      forwardPE:       null, // not in ratios-ttm stable endpoint
+      forwardPE:       computeForwardPE(),
       priceToCashFlow: nOrNull(ratios.priceToFreeCashFlowRatioTTM) ?? nOrNull(ratios.priceToOperatingCashFlowRatioTTM),
       pegRatio:        nOrNull(ratios.priceToEarningsGrowthRatioTTM),
 
@@ -279,7 +303,8 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
       profitMargin:    nOrNull(ratios.netProfitMarginTTM),
       fcfMargin:       fcfMarginCalc(),
 
-      roe:           nOrNull(ratios.returnOnEquityTTM),
+      // ROE comes from key-metrics-ttm, NOT ratios-ttm
+      roe:           nOrNull(keyMetrics.returnOnEquityTTM),
       dividendYield: nOrNull(ratios.dividendYieldTTM),
       beta:          nOrNull(profile.beta),
       marketCap:     nOrNull(profile.marketCap),
