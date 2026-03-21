@@ -163,12 +163,20 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 800 ms between calls to avoid 429 bursts ─────
+    // ── Fully sequential with 1500 ms between calls to avoid 429 bursts ─────
     // Each call waits for the previous one before firing.
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(800);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(800);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(800);
-    const profile    = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
+    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(1500);
+    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(1500);
+    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP, is429); await sleep(1500);
+    
+    // Try to get company name from /quote to save hitting /profile
+    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429); await sleep(1500);
+    const fmpQuote = fmpQuoteArr[0] ?? {};
+    
+    let profile: Record<string, any> = {};
+    if (!fmpQuote.name && !is429.value) {
+      profile = (await fmpSafe("/profile", { symbol: ticker }, is429))[0] ?? {};
+    }
 
     // Removed the abort on 429 so the UI still shows whatever data succeeded (if any).
 
@@ -224,13 +232,13 @@ export async function getStockData(
     console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
 
     let quote: StockQuote | null = null;
-    if (n(profile.price) > 0) {
+    if (n(fmpQuote.price) > 0 || n(profile.price) > 0) {
       quote = { 
-        symbol: profile.symbol ?? ticker, 
-        price: n(profile.price), 
-        changesPercentage: n(profile.changePercentage),
-        companyName: profile.companyName,
-        image: profile.image
+        symbol: fmpQuote.symbol ?? profile.symbol ?? ticker, 
+        price: n(fmpQuote.price) || n(profile.price), 
+        changesPercentage: n(fmpQuote.changesPercentage) || n(profile.changePercentage),
+        companyName: fmpQuote.name || profile.companyName,
+        image: profile.image // only available if we hit profile
       };
     } else {
       const yp = await yahooChartPrice(ticker);
@@ -259,17 +267,21 @@ export async function getStockData(
     const i0   = incomeArr[0]  ?? {};   // Most recent income row
     const b0   = balanceArr[0] ?? {};   // Most recent balance row
     const c0   = cashArr[0]    ?? {};   // Most recent cashflow row
-    const price = n(profile.price);
-    const mktCap = n(profile.marketCap);
+    const mktCap = n(fmpQuote.marketCap) || n(profile.marketCap);
 
     // Margins — derived
-    const grossMarginDerived     = pct(n(i0.grossProfit),    n(i0.revenue));
-    const operatingMarginDerived = pct(n(i0.operatingIncome) || n(i0.ebit), n(i0.revenue));
-    const profitMarginDerived    = pct(n(i0.netIncome),      n(i0.revenue));
-    const fcfMarginDerived       = pct(n(c0.freeCashFlow),   n(i0.revenue));
-    const roeDerived             = pct(n(i0.netIncome), n(b0.totalStockholdersEquity) || n(b0.totalEquity));
+    // ... no changes to derived definitions
+    const grossMarginDerived     = (n(i0.revenue) > 0) ? (n(i0.grossProfit) / n(i0.revenue)) * 100 : null;
+    const operatingMarginDerived = (n(i0.revenue) > 0) ? (n(i0.operatingIncome) / n(i0.revenue)) * 100 : null;
+    const profitMarginDerived    = (n(i0.revenue) > 0) ? (n(i0.netIncome) / n(i0.revenue)) * 100 : null;
+    const fcfMarginDerived       = (n(i0.revenue) > 0) ? (n(c0.freeCashFlow) / n(i0.revenue)) * 100 : null;
+
+    // Derived ROE
+    const tEq       = n(b0.totalStockholdersEquity) || n(b0.totalEquity);
+    const roeDerived = (tEq > 0) ? (n(i0.netIncome) / tEq) * 100 : null;
 
     // Derived PE: price / epsDiluted (from income statement)
+    const price = n(fmpQuote.price) || n(profile.price);
     const epsDiluted    = n(i0.epsDiluted) || n(i0.eps);
     const trailingPEDerived = n(i0.epsdiluted) > 0 ? price / n(i0.epsdiluted) : null;
 
@@ -279,7 +291,7 @@ export async function getStockData(
 
     // Dividend yield: profile.lastDividend / price
     const lastDiv       = n(profile.lastDividend);
-    const divYieldDerived = (n(profile.lastDiv) / price) * 100 || null;
+    const divYieldDerived = price > 0 ? (lastDiv / price) * 100 : null;
 
     // Forward PE
     const epsGrowth = incomeArr.length >= 2

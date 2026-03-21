@@ -69,6 +69,7 @@ export default function Home() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (tickerInput.trim()) {
+      setLoading(true); // Lock the UI button instantly to block double-clicks
       setCurrentTicker(tickerInput.trim().toUpperCase());
       setTickerInput("");
     }
@@ -154,9 +155,11 @@ export default function Home() {
                     </h1>
                   </div>
                   {quote.companyName && (
-                    <span className="text-sm font-medium text-gray-400 mt-2 uppercase tracking-wide truncate max-w-[200px]" title={quote.companyName}>
-                      {quote.companyName}
-                    </span>
+                    <div className="mt-3">
+                      <span className="text-xl font-bold text-gray-200 shadow-sm leading-tight block w-full pr-4" title={quote.companyName}>
+                        {quote.companyName}
+                      </span>
+                    </div>
                   )}
                 </div>
                 <span className="text-xs font-bold text-gray-400 px-3 py-1.5 bg-gray-800/80 rounded-lg uppercase tracking-wider shadow-inner">
