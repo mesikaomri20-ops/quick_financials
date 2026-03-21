@@ -151,6 +151,12 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     if (balanceRaw.status === "rejected") console.error("[FMP] balance-sheet failed:", (balanceRaw as any).reason?.message);
     if (cashRaw.status === "rejected") console.error("[FMP] cash-flow failed:", (cashRaw as any).reason?.message);
 
+    // Debug: log first row of each array so field names are visible in Vercel logs
+    if (incomeArr.length > 0)  console.log("[FMP] Income sample:",  JSON.stringify(incomeArr[0]));
+    if (balanceArr.length > 0) console.log("[FMP] Balance sample:", JSON.stringify(balanceArr[0]));
+    if (cashArr.length > 0)    console.log("[FMP] Cash sample:",    JSON.stringify(cashArr[0]));
+    if (Object.keys(profile).length > 0) console.log("[FMP] Profile sample:", JSON.stringify(profile));
+
     // ── 2. Build FinancialYearData — sync by year across all three statements ─
     const yearMap = new Map<string, FinancialYearData>();
 
@@ -166,24 +172,29 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
     };
 
     // FMP income statement fields (already plain numbers — no {raw,fmt} wrapping)
+    // calendarYear is "2024" directly; fallback to first 4 chars of date string
     for (const row of incomeArr) {
-      const year = yearFrom(row.date ?? row.fillingDate ?? "");
-      if (year === "N/A") continue;
+      const year: string = row.calendarYear
+        ? String(row.calendarYear)
+        : (row.date ?? row.fillingDate ?? "").substring(0, 4);
+      if (!year || year.length < 4) continue;
       const e = ensureYear(year);
-      e.revenue        = n(row.revenue);
-      e.grossProfit    = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
-      e.operatingIncome = n(row.operatingIncome);
-      e.netIncome      = n(row.netIncome);
+      e.revenue         = n(row.revenue);
+      e.grossProfit     = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
+      e.operatingIncome = n(row.operatingIncome) || n(row.ebitda);
+      e.netIncome       = n(row.netIncome);
     }
 
     // FMP balance sheet fields
     for (const row of balanceArr) {
-      const year = yearFrom(row.date ?? row.fillingDate ?? "");
-      if (year === "N/A") continue;
+      const year: string = row.calendarYear
+        ? String(row.calendarYear)
+        : (row.date ?? row.fillingDate ?? "").substring(0, 4);
+      if (!year || year.length < 4) continue;
       const e = ensureYear(year);
       e.totalAssets      = n(row.totalAssets);
       e.totalLiabilities = n(row.totalLiabilities);
-      e.totalEquity      = n(row.totalStockholdersEquity) || n(row.stockholdersEquity);
+      e.totalEquity      = n(row.totalStockholdersEquity) || n(row.stockholdersEquity) || n(row.totalEquity);
       e.cash             = n(row.cashAndCashEquivalents) || n(row.cashAndShortTermInvestments);
       e.debt             = n(row.totalDebt) || (n(row.shortTermDebt) + n(row.longTermDebt));
       e.retainedEarnings = n(row.retainedEarnings);
@@ -191,10 +202,13 @@ export async function getStockData(symbol: string): Promise<StockData | null> {
 
     // FMP cash flow fields
     for (const row of cashArr) {
-      const year = yearFrom(row.date ?? row.fillingDate ?? "");
-      if (year === "N/A") continue;
+      const year: string = row.calendarYear
+        ? String(row.calendarYear)
+        : (row.date ?? row.fillingDate ?? "").substring(0, 4);
+      if (!year || year.length < 4) continue;
       const e = ensureYear(year);
       e.operatingCashFlow = n(row.operatingCashFlow);
+      // FMP freeCashFlow = operatingCashFlow + capitalExpenditure (capex is negative)
       e.freeCashFlow      = n(row.freeCashFlow) || (n(row.operatingCashFlow) + n(row.capitalExpenditure));
     }
 
