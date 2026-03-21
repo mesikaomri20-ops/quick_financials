@@ -43,17 +43,74 @@ export default function Home() {
     setLoading(true);
     setError(false);
     setRateLimited(false);
+    
+    const API_KEY = "LU2KvGFffEm1ChIVE6iFBZTGLzxUp6Jm";
+    const BASE_URL = "https://financialmodelingprep.com/api/v3";
+    
     try {
-      const result = await getStockData(symbol, p);
-      if (result?.rateLimited) {
-        setRateLimited(true);
-        setData(null);
-      } else if (result && (result.quote || result.fundamentals)) {
-        setData(result);
-      } else {
-        setData(null);
+      // 1. Fetch Income Statement (Annual/Quarterly)
+      const incomeUrl = `${BASE_URL}/income-statement/${symbol}?period=${p}&limit=5&apikey=${API_KEY}`;
+      const incomeRes = await fetch(incomeUrl);
+      if (incomeRes.status === 429) { setRateLimited(true); return; }
+      const incomeArr = await incomeRes.json();
+      
+      // 2. Fetch Quote
+      const quoteUrl = `${BASE_URL}/quote/${symbol}?apikey=${API_KEY}`;
+      const quoteRes = await fetch(quoteUrl);
+      const quoteArr = await quoteRes.json();
+      const fmpQuote = quoteArr[0] || {};
+      
+      if (!Array.isArray(incomeArr) || incomeArr.length === 0) {
         setError(true);
+        return;
       }
+
+      // Map to StockData structure
+      const financials = incomeArr.map((row: any) => ({
+        year: row.calendarYear || (row.date ? row.date.substring(0, 4) : "N/A"),
+        revenue: Number(row.revenue) || 0,
+        grossProfit: Number(row.grossProfit) || 0,
+        operatingIncome: Number(row.operatingIncome) || 0,
+        netIncome: Number(row.netIncome) || 0,
+        researchAndDevelopment: Number(row.researchAndDevelopmentExpenses) || 0,
+        // Missing fields set to 0
+        totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
+        cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
+      })).reverse(); // Oldest to newest for charts
+
+      const i0 = incomeArr[0] || {};
+      const calcMargin = (num: number, den: number) => (den > 0 ? (num / den) * 100 : null);
+
+      const result: StockData = {
+        quote: {
+          symbol: fmpQuote.symbol || symbol,
+          price: Number(fmpQuote.price) || 0,
+          changesPercentage: Number(fmpQuote.changesPercentage) || 0,
+          companyName: fmpQuote.name || symbol,
+        },
+        fundamentals: {
+          trailingPE: Number(fmpQuote.pe) || null,
+          forwardPE: null,
+          priceToCashFlow: null,
+          pegRatio: null,
+          grossMargin: calcMargin(Number(i0.grossProfit), Number(i0.revenue)),
+          operatingMargin: calcMargin(Number(i0.operatingIncome), Number(i0.revenue)),
+          profitMargin: calcMargin(Number(i0.netIncome), Number(i0.revenue)),
+          fcfMargin: null,
+          roe: null,
+          dividendYield: null,
+          beta: null,
+          marketCap: Number(fmpQuote.marketCap) || null,
+          totalDebt: null,
+          totalCash: null,
+          financials,
+        }
+      };
+      
+      setData(result);
+    } catch (e) {
+      console.error("Fetch failed:", e);
+      setError(true);
     } finally {
       setLoading(false);
     }

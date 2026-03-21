@@ -141,202 +141,24 @@ function rowLabel(row: any, period: Period): string {
   return year;
 }
 
-// ─── Main Export ───────────────────────────────────────────────────────────
+// ─── Main Export (Server-side fetching disabled) ───────────────────────────
 
+/**
+ * Server-side fetching is disabled to bypass Vercel IP throttling.
+ * Fetching now happens on the Client-Side (src/app/page.tsx).
+ */
 export async function getStockData(
   symbol: string,
   period: Period = "annual"
 ): Promise<StockData | null> {
-  const ticker   = symbol.toUpperCase().trim();
-  const cacheKey = `${ticker}:${period}`;
-
-  // ── Cache hit ───────────────────────────────────────────────────────────
-  const hit = _cache.get(cacheKey);
-  if (hit && Date.now() - hit.ts < CACHE_TTL) {
-    console.log(`[CACHE] Hit for ${cacheKey}`);
-    return hit.data;
-  }
-
-  console.log(`[getStockData] Fetching ${ticker} (${period})…`);
-
-  try {
-    const limit  = "5"; // FMP free tier: max 5 records per endpoint
-    const minLen = period === "quarter" ? 7 : 4;
-    const stmtP  = { symbol: ticker, period, limit };
-    const is429  = { value: false }; // shared 429 sentinel
-
-    // ── Radical Reduction: Single Fetch Strategy ──────────────────────────
-    // Fetch ONLY income statement to stay under free tier limits.
-    const incomeArr  = await fmpSafe("/income-statement", stmtP, is429);
-    
-    // Removed all other fetches to reduce footprint by 66%
-    const balanceArr: any[] = [];
-    const fmpQuote: Record<string, any> = {};
-    const cashArr: any[] = [];
-    const profile: Record<string, any> = {};
-    const ratios: Record<string, any> = {};
-    const keyMetrics: Record<string, any> = {};
-
-    // ── Map statements to FinancialYearData ────────────────────────────────
-    const yearMap = new Map<string, FinancialYearData>();
-    const ensure  = (label: string): FinancialYearData => {
-      if (!yearMap.has(label)) yearMap.set(label, {
-        year: label,
-        revenue: 0, grossProfit: 0, operatingIncome: 0, netIncome: 0, researchAndDevelopment: 0,
-        totalAssets: 0, totalLiabilities: 0, totalEquity: 0,
-        cash: 0, debt: 0, freeCashFlow: 0, operatingCashFlow: 0, retainedEarnings: 0,
-      });
-      return yearMap.get(label)!;
-    };
-
-    for (const row of incomeArr) {
-      const lbl = rowLabel(row, period);
-      if (lbl.length < minLen) continue;
-      const e = ensure(lbl);
-      e.revenue         = n(row.revenue);
-      e.grossProfit     = n(row.grossProfit) || (n(row.revenue) - n(row.costOfRevenue));
-      e.operatingIncome = n(row.operatingIncome) || n(row.ebit);
-      e.netIncome       = n(row.netIncome);
-      e.researchAndDevelopment = n(row.researchAndDevelopmentExpenses);
-    }
-    for (const row of balanceArr) {
-      const lbl = rowLabel(row, period);
-      if (lbl.length < minLen) continue;
-      const e = ensure(lbl);
-      e.totalAssets      = n(row.totalAssets);
-      e.totalLiabilities = n(row.totalLiabilities);
-      e.totalEquity      = n(row.totalStockholdersEquity) || n(row.totalEquity);
-      e.cash             = n(row.cashAndCashEquivalents)  || n(row.cashAndShortTermInvestments);
-      e.debt             = n(row.totalDebt) || (n(row.shortTermDebt) + n(row.longTermDebt));
-      e.retainedEarnings = n(row.retainedEarnings);
-    }
-    for (const row of cashArr) {
-      const lbl = rowLabel(row, period);
-      if (lbl.length < minLen) continue;
-      const e = ensure(lbl);
-      e.operatingCashFlow = n(row.operatingCashFlow) || n(row.netCashProvidedByOperatingActivities);
-      e.freeCashFlow      = n(row.freeCashFlow) || (n(row.operatingCashFlow) + n(row.capitalExpenditure));
-    }
-
-    const financials = Array.from(yearMap.values()).sort((a, b) => {
-      if (period === "quarter") {
-        const pq = (s: string) => { const m = s.match(/^Q(\d)\s+(\d{4})$/); return m ? +m[2] * 10 + +m[1] : 0; };
-        return pq(a.year) - pq(b.year);
-      }
-      return parseInt(a.year) - parseInt(b.year);
-    });
-
-    console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
-
-    let quote: StockQuote | null = null;
-    const i0 = incomeArr[0] ?? {};
-    
-    // Derive company name from income statement JSON if possible
-    const derivedName = i0.companyName || i0.name || ticker;
-
-    if (incomeArr.length > 0) {
-      quote = { 
-        symbol: ticker, 
-        price: 0, // No price in income statement
-        changesPercentage: 0,
-        companyName: derivedName,
-      };
-    } else {
-      const yp = await yahooChartPrice(ticker);
-      if (yp) {
-        quote = { symbol: ticker, price: yp.price, changesPercentage: Math.abs(yp.changePercent) < 5 ? yp.changePercent * 100 : yp.changePercent };
-      }
-    }
-
-    // ── Fundamentals: derive from statements first, enrich from Tier 2 ─────
-    //
-    // All margin/profitability fields are computed directly from incomeArr[0],
-    // balanceArr[0], cashArr[0] — no extra API call needed:
-    //   grossMargin     = grossProfit / revenue
-    //   operatingMargin = operatingIncome / revenue
-    //   profitMargin    = netIncome / revenue
-    //   fcfMargin       = freeCashFlow / revenue
-    //   ROE             = netIncome / totalEquity
-    //   trailingPE      = price / epsDiluted  (epsDiluted is in income statement)
-    //   P/FCF           = marketCap / annualFCF
-    //   dividendYield   = lastDividend / price  (profile.lastDividend)
-    //   PEG             = trailingPE / (epsGrowthRate * 100)
-    //   forwardPE       = price / (epsTTM * (1 + revenueGrowth))
-    //
-    // Ratios-ttm and key-metrics-ttm are used as *overrides* when available.
-
-    // Manual calculation of margins from income statement
-    const calcMargin = (numData: any, denData: any): number | null => {
-      const num = n(numData);
-      const den = n(denData);
-      if (den === 0) return null;
-      
-      const res = (num / den) * 100;
-      // Safety Check:
-      if (res > 100 || res < -100) return null; 
-      return res;
-    };
-
-    const nOrNullSafe = (val: any) => { const x = n(val); return x === 0 && !val ? null : x; }
-
-    const grossMarginDerived     = calcMargin(i0.grossProfit, i0.revenue);
-    const operatingMarginDerived = calcMargin(i0.operatingIncome, i0.revenue);
-    const profitMarginDerived    = calcMargin(i0.netIncome, i0.revenue);
-    const fcfMarginDerived       = null; 
-
-    // ROE removed (needs balance sheet)
-    let roeDerived = null;
-
-    // Exact fields requested by User - price metrics removed
-    const currentPE = null;
-    const beta = null;
-
-    const divYieldDerived = null; // profile removed
-
-    // Use derived metrics but merge APIs
-    const fundamentals: YahooFundamentals = {
-      trailingPE:      currentPE,
-      forwardPE:       null,
-      priceToCashFlow: null,
-      pegRatio:        null,
-
-      grossMargin:     grossMarginDerived,
-      operatingMargin: operatingMarginDerived,
-      profitMargin:    profitMarginDerived,
-      fcfMargin:       fcfMarginDerived,
-
-      roe:           roeDerived,
-      dividendYield: null,
-      beta:          nOrNullSafe(fmpQuote.beta),
-      marketCap:     null,
-      totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
-      totalCash:     financials.length > 0 ? nOrNull(financials[financials.length - 1].cash) : null,
-
-      financials,
-    };
-
-    if (!quote && financials.length === 0) {
-      console.error(`[getStockData] No data at all for ${ticker}`);
-      return null;
-    }
-
-    const result: StockData = { quote: quote, fundamentals, quoteRateLimited: false };
-
-    // Cache result
-    _cache.set(cacheKey, { data: result, ts: Date.now() });
-    return result;
-
-  } catch (error: any) {
-    console.error(`[getStockData] Unhandled for ${ticker}:`, error.message);
-    return null;
-  }
+  console.warn(`[getStockData] Server-side fetch called for ${symbol}. This is deprecated.`);
+  return null;
 }
 
 export async function getFinancialData(
   symbol: string,
   period: Period = "annual"
 ): Promise<YahooFundamentals | null> {
-  const data = await getStockData(symbol, period);
-  return data?.fundamentals ?? null;
+  return null;
 }
 
