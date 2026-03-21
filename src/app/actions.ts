@@ -80,7 +80,9 @@ async function fmpGet(path: string, params: Record<string, string>): Promise<any
   const qs  = new URLSearchParams({ ...params, apikey: FMP_KEY });
   const url = `${FMP_BASE}${path}?${qs}`;
   console.log(`[FMP] ${path}?${new URLSearchParams({ ...params, apikey: "***" })}`);
-  const res = await fetch(url, { cache: "no-store" });
+  const res = await fetch(url, { 
+    next: { revalidate: 600 } 
+  });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`HTTP ${res.status} — ${path} — ${body.slice(0, 150)}`);
@@ -163,15 +165,13 @@ export async function getStockData(
     const stmtP  = { symbol: ticker, period, limit };
     const is429  = { value: false }; // shared 429 sentinel
 
-    // ── Fully sequential with 2000 ms between calls to avoid 429 bursts ─────
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP, is429); await sleep(2000);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP, is429); await sleep(2000);
+    // ── Radical Reduction: Single Fetch Strategy ──────────────────────────
+    // Fetch ONLY income statement to stay under free tier limits.
+    const incomeArr  = await fmpSafe("/income-statement", stmtP, is429);
     
-    // Try to get company name from /quote
-    const fmpQuoteArr = await fmpSafe("/quote", { symbol: ticker }, is429);
-    const fmpQuote = fmpQuoteArr[0] ?? {};
-    
-    // Removed cash-flow, key-metrics, ratios-ttm, and profile fetching per user instructions
+    // Removed all other fetches to reduce footprint by 66%
+    const balanceArr: any[] = [];
+    const fmpQuote: Record<string, any> = {};
     const cashArr: any[] = [];
     const profile: Record<string, any> = {};
     const ratios: Record<string, any> = {};
@@ -229,13 +229,17 @@ export async function getStockData(
     console.log(`[FMP] ${ticker} (${period}) — ${financials.length} rows:`, financials.map(f => f.year).join(", "));
 
     let quote: StockQuote | null = null;
-    if (n(fmpQuote.price) > 0) {
+    const i0 = incomeArr[0] ?? {};
+    
+    // Derive company name from income statement JSON if possible
+    const derivedName = i0.companyName || i0.name || ticker;
+
+    if (incomeArr.length > 0) {
       quote = { 
-        symbol: fmpQuote.symbol ?? ticker, 
-        price: n(fmpQuote.price), 
-        changesPercentage: n(fmpQuote.changesPercentage),
-        companyName: fmpQuote.name || ticker,
-        image: undefined // profile removed
+        symbol: ticker, 
+        price: 0, // No price in income statement
+        changesPercentage: 0,
+        companyName: derivedName,
       };
     } else {
       const yp = await yahooChartPrice(ticker);
@@ -261,10 +265,6 @@ export async function getStockData(
     //
     // Ratios-ttm and key-metrics-ttm are used as *overrides* when available.
 
-    const i0   = incomeArr[0]  ?? {};   // Most recent income row
-    const b0   = balanceArr[0] ?? {};   // Most recent balance row
-    const mktCap = n(fmpQuote.marketCap);
-
     // Manual calculation of margins from income statement
     const calcMargin = (numData: any, denData: any): number | null => {
       const num = n(numData);
@@ -282,19 +282,14 @@ export async function getStockData(
     const grossMarginDerived     = calcMargin(i0.grossProfit, i0.revenue);
     const operatingMarginDerived = calcMargin(i0.operatingIncome, i0.revenue);
     const profitMarginDerived    = calcMargin(i0.netIncome, i0.revenue);
-    const fcfMarginDerived       = null; // fcf removed
+    const fcfMarginDerived       = null; 
 
-    // ROE strictly: (Net Income / Total Stockholders Equity) * 100
+    // ROE removed (needs balance sheet)
     let roeDerived = null;
-    const tEq = n(b0.totalStockholdersEquity);
-    if (tEq !== 0) {
-      const roe = (n(i0.netIncome) / tEq) * 100;
-      roeDerived = (roe > 100 || roe < -100) ? null : roe;
-    }
 
-    // Exact fields requested by User
-    const currentPE = nOrNullSafe(fmpQuote.pe);
-    const beta = nOrNullSafe(fmpQuote.beta);
+    // Exact fields requested by User - price metrics removed
+    const currentPE = null;
+    const beta = null;
 
     const divYieldDerived = null; // profile removed
 
@@ -313,7 +308,7 @@ export async function getStockData(
       roe:           roeDerived,
       dividendYield: null,
       beta:          nOrNullSafe(fmpQuote.beta),
-      marketCap:     nOrNull(mktCap),
+      marketCap:     null,
       totalDebt:     financials.length > 0 ? nOrNull(financials[financials.length - 1].debt) : null,
       totalCash:     financials.length > 0 ? nOrNull(financials[financials.length - 1].cash) : null,
 
