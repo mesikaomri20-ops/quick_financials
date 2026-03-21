@@ -348,7 +348,7 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 export async function analyzeStock(data: StockData): Promise<string> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" }, { apiVersion: 'v1' });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
 
     // Format a concise JSON payload to save tokens
     const payload = {
@@ -390,7 +390,7 @@ Provide a concise, professional analysis in **Hebrew**. Use bullet points. Focus
     return result.response.text();
   } catch (error: any) {
     console.error("[analyzeStock] Failed:", error.message);
-    return "שגיאה ביצירת הניתוח. אנא נסה שוב מאוחר יותר.";
+    return "ה-AI כרגע בעומס, נסה שוב בעוד דקה";
   }
 }
 
