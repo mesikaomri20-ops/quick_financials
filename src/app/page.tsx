@@ -342,8 +342,7 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
 
     const calcMarginUI = (metric: number, rev: number) => {
       if (rev <= 0) return 0;
-      let res = (metric / rev) * 100;
-      if (res > 100 || res < -100) res = metric / rev;
+      const res = (metric / rev) * 100;
       return (res > 100 || res < -100) ? 0 : res;
     };
 

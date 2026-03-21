@@ -278,11 +278,8 @@ export async function getStockData(
       const den = n(denData);
       if (den === 0) return null;
       
-      let res = (num / den) * 100;
-      if (res > 100 || res < -100) {
-        res = num / den; // raw decimal fallback
-      }
-      // Data Sanitization rule:
+      const res = (num / den) * 100;
+      // Safety Check:
       if (res > 100 || res < -100) return null; 
       return res;
     };
@@ -298,8 +295,7 @@ export async function getStockData(
     let roeDerived = null;
     const tEq = n(b0.totalStockholdersEquity);
     if (tEq !== 0) {
-      let roe = (n(i0.netIncome) / tEq) * 100;
-      if (roe > 100 || roe < -100) roe = n(i0.netIncome) / tEq;
+      const roe = (n(i0.netIncome) / tEq) * 100;
       roeDerived = (roe > 100 || roe < -100) ? null : roe;
     }
 
