@@ -94,10 +94,18 @@ const n = (val: any): number => { if (val === null || val === undefined || val =
 
 
 function rowLabel(row: any, period: Period): string {
-  const year = row.fiscalYear ? String(row.fiscalYear) : (row.calendarYear ? String(row.calendarYear) : (row.date ?? "").substring(0, 4));
+  if (!row.date) return "N/A";
+  const date = new Date(row.date);
+  const year = date.getFullYear().toString();
+  
   if (period === "quarter") {
-    const q = String(row.period ?? "");
-    return q.startsWith("Q") && year.length === 4 ? `${q} ${year}` : year;
+    // If we have an explicit period (like Q1) use it, otherwise calculate from month
+    let q = row.period ? String(row.period) : "";
+    if (!q.startsWith("Q")) {
+        const month = date.getMonth();
+        q = `Q${Math.floor(month / 3) + 1}`;
+    }
+    return `${q} ${year}`;
   }
   return year;
 }
@@ -120,7 +128,7 @@ export async function getStockData(
     const isFinancialsStale = !data?.lastUpdatedFinancials || (now - data.lastUpdatedFinancials > 24 * 60 * 60 * 1000); // 24 hours
 
     if (!data || isPriceStale || isFinancialsStale) {
-      const freshData = await fetchStockDataFromAPI(ticker, data, isPriceStale, isFinancialsStale);
+      const freshData = await fetchStockDataFromAPI(ticker, data, isPriceStale, isFinancialsStale, period);
       
       if (freshData && !freshData.error && !freshData.rateLimited) {
         const dataToSave = {
@@ -144,7 +152,7 @@ export async function getStockData(
     return data as StockData;
   } catch (err) {
     console.error(`[Firestore Buffer] Error fetching ${ticker}:`, err);
-    return await fetchStockDataFromAPI(ticker, null, true, true);
+    return await fetchStockDataFromAPI(ticker, null, true, true, period);
   }
 }
 
@@ -158,7 +166,8 @@ async function fetchStockDataFromAPI(
   ticker: string,
   existingData: any,
   fetchQuote: boolean,
-  fetchFinancials: boolean
+  fetchFinancials: boolean,
+  period: Period
 ): Promise<any> {
   try {
     const symbol = ticker;
@@ -170,16 +179,13 @@ async function fetchStockDataFromAPI(
     }
 
     if (fetchFinancials) {
-      summary = await yahooFinance.quoteSummary(symbol, {
-        modules: [
-          'price', 
-          'summaryDetail', 
-          'financialData', 
-          'defaultKeyStatistics',
-          'incomeStatementHistory',
-          'balanceSheetHistory',
-          'cashflowStatementHistory'
-        ]
+      const type = period === "annual" ? "annual" : "quarterly";
+      const period1 = period === "annual" ? "2020-01-01" : "2023-01-01";
+      
+      summary = await yahooFinance.fundamentalsTimeSeries(symbol, {
+        module: 'all',
+        type: type,
+        period1: period1
       });
     }
 
@@ -200,10 +206,13 @@ async function fetchStockDataFromAPI(
     }
 
     if (fetchFinancials && summary) {
-       const sd = summary.summaryDetail || {};
-       const fd = summary.financialData || {};
-       const ks = summary.defaultKeyStatistics || {};
-       const priceMod = summary.price || {};
+       const modules: any[] = ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'price'];
+       const stats = await yahooFinance.quoteSummary(symbol, { modules }).catch(() => ({}));
+       
+       const sd = (stats as any).summaryDetail || {};
+       const fd = (stats as any).financialData || {};
+       const ks = (stats as any).defaultKeyStatistics || {};
+       const priceMod = (stats as any).price || {};
        
        if (!freshStockData.quote.companyName) {
            freshStockData.quote.companyName = priceMod.shortName || priceMod.longName || ticker;
@@ -225,69 +234,36 @@ async function fetchStockDataFromAPI(
           marketCap: priceMod.marketCap || sd.marketCap || null,
           totalDebt: fd.totalDebt || null,
           totalCash: fd.totalCash || null,
-          financials: existingData?.fundamentals?.financials || []
+          financials: []
        };
 
-       if (summary.incomeStatementHistory && summary.balanceSheetHistory && summary.cashflowStatementHistory) {
-           const is = summary.incomeStatementHistory.incomeStatementHistory || [];
-           const bs = summary.balanceSheetHistory.balanceSheetStatements || [];
-           const cs = summary.cashflowStatementHistory.cashflowStatements || [];
-           
-           const yearsMap = new Map<string, FinancialYearData>();
-           
-           is.forEach((statement: any) => {
-               if (!statement.endDate) return;
-               const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) {
-                   yearsMap.set(year, {
-                       year,
-                       revenue: 0,
-                       grossProfit: 0,
-                       operatingIncome: 0,
-                       netIncome: 0,
-                       researchAndDevelopment: 0,
-                       totalAssets: 0,
-                       totalLiabilities: 0,
-                       totalEquity: 0,
-                       cash: 0,
-                       debt: 0,
-                       freeCashFlow: 0,
-                       operatingCashFlow: 0,
-                       retainedEarnings: 0
-                   });
-               }
-               const row = yearsMap.get(year)!;
-               row.revenue = n(statement.totalRevenue);
-               row.grossProfit = n(statement.grossProfit);
-               row.operatingIncome = n(statement.operatingIncome);
-               row.netIncome = n(statement.netIncome);
-               row.researchAndDevelopment = n(statement.researchDevelopment);
-           });
-           
-           bs.forEach((statement: any) => {
-               if (!statement.endDate) return;
-               const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) return; // Should have been in IS
-               const row = yearsMap.get(year)!;
-               row.totalAssets = n(statement.totalAssets);
-               row.totalLiabilities = n(statement.totalLiab);
-               row.totalEquity = n(statement.totalStockholderEquity);
-               row.cash = n(statement.cash || statement.cashAndCashEquivalents);
-               row.debt = n(statement.shortLongTermDebt || statement.longTermDebt);
-               row.retainedEarnings = n(statement.retainedEarnings);
-           });
+       if (Array.isArray(summary)) {
+           const financialArr: FinancialYearData[] = summary.map((item: any) => {
+               const rev = item.totalRevenue || item.operatingRevenue || 0;
+               const gp = item.grossProfit ?? (rev - (item.costOfRevenue || 0));
+               
+               // Yahoo Balance Sheet items often use netMinorityInterest suffix
+               const totalLiab = item.totalLiabilitiesNetMinorityInterest || (item.totalAssets - (item.stockholdersEquity || 0));
 
-           cs.forEach((statement: any) => {
-               if (!statement.endDate) return;
-               const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) return;
-               const row = yearsMap.get(year)!;
-               row.operatingCashFlow = n(statement.totalCashFromOperatingActivities);
-               row.freeCashFlow = n((statement.totalCashFromOperatingActivities || 0) + (statement.capitalExpenditures || 0));
+               return {
+                   year: rowLabel({ date: item.date, period: item.periodType === '3M' ? null : item.periodType }, period),
+                   revenue: rev,
+                   grossProfit: gp,
+                   operatingIncome: item.operatingIncome || 0,
+                   netIncome: item.netIncome || item.netIncomeCommonStockholders || 0,
+                   researchAndDevelopment: item.researchAndDevelopment || 0,
+                   totalAssets: item.totalAssets || 0,
+                   totalLiabilities: totalLiab,
+                   totalEquity: item.stockholdersEquity || 0,
+                   cash: item.cashAndCashEquivalents || 0,
+                   debt: item.totalDebt || 0,
+                   freeCashFlow: item.freeCashFlow || ((item.operatingCashFlow || 0) - Math.abs(item.capitalExpenditure || 0)),
+                   operatingCashFlow: item.operatingCashFlow || 0,
+                   retainedEarnings: item.retainedEarnings || 0
+               };
            });
            
-           const financialArr = Array.from(yearsMap.values()).sort((a,b) => parseInt(a.year) - parseInt(b.year));
-           freshStockData.fundamentals.financials = financialArr;
+           freshStockData.fundamentals.financials = financialArr.sort((a,b) => a.year.localeCompare(b.year));
        }
     }
 
