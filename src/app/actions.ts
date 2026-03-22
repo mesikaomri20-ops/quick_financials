@@ -2,8 +2,7 @@
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import YahooFinance from 'yahoo-finance2';
-const yahooFinance = new YahooFinance();
+import yf from 'yahoo-finance2';
 const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 
@@ -132,21 +131,7 @@ export async function getStockData(
   const docRef = doc(db, "stocks", ticker);
   
   try {
-    /* 
-    const docSnap = await getDoc(docRef);
-    const data = docSnap.exists() ? docSnap.data() : null;
-    const now = Date.now();
-    
-    const isPriceStale = !data?.lastUpdatedPrice || (now - data.lastUpdatedPrice > 15 * 60 * 1000); // 15 mins
-    const isFinancialsStale = !data?.lastUpdatedFinancials || (now - data.lastUpdatedFinancials > 24 * 60 * 60 * 1000); // 24 hours
-
-    if (!data || isPriceStale || isFinancialsStale) {
-      const freshData = await fetchStockDataFromAPI(ticker, data, isPriceStale, isFinancialsStale, period);
-      ...
-    }
-    */
-    
-    // Direct call to Yahoo to bypass cache and get fresh data
+    // FORCE BYPASS FIRESTORE FOR DIAGNOSTIC
     return await fetchStockDataFromAPI(ticker, null, true, true, period);
   } catch (err) {
     console.error(`[Firestore Buffer] Error fetching ${ticker}:`, err);
@@ -162,126 +147,45 @@ const safePercent = (val: number | null) => {
 
 async function fetchStockDataFromAPI(
   ticker: string,
-  existingData: any, // Ignored for surgical fresh fetch
+  existingData: any, // Ignored for diagnostic
   fetchQuote: boolean,
   fetchFinancials: boolean,
   period: Period
 ): Promise<any> {
-  const yf = yahooFinance;
-  const symbol = ticker;
-  try {
-    // 1. Parallel fetch: quoteSummary (for top cards) + fundamentalsTimeSeries (for charts)
-    const [stats, annualTS, quarterlyTS] = await Promise.all([
-      yf.quoteSummary(symbol, {
-        modules: [
-          'price', 
-          'summaryDetail', 
-          'financialData', 
-          'defaultKeyStatistics'
-        ]
-      }).catch(() => ({} as any)),
-      yf.fundamentalsTimeSeries(symbol, {
-        module: 'all',
-        type: 'annual',
-        period1: '2020-01-01',
-        period2: '2026-12-31'
-      }).catch(() => []),
-      yf.fundamentalsTimeSeries(symbol, {
-        module: 'all',
-        type: 'quarterly',
-        period1: '2020-01-01',
-        period2: '2026-12-31'
-      }).catch(() => [])
-    ]);
+    const symbol = ticker;
+    try {
+        // DIAGNOSTIC FETCH: ONLY price and summaryDetail
+        const rawData: any = await yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
+        console.log('--- RAW DATA FROM YAHOO ---', JSON.stringify(rawData).slice(0, 500));
 
-    const priceMod = stats.price || {};
-    const sd = stats.summaryDetail || {};
-    const fd = stats.financialData || {};
-    const ks = stats.defaultKeyStatistics || {};
+        const priceMod = rawData.price || {};
+        const sd = rawData.summaryDetail || {};
 
-    const freshStockData: any = {
-      symbol: ticker,
-      quote: {
-        symbol: ticker,
-        price: priceMod.regularMarketPrice?.raw || 0,
-        changesPercentage: priceMod.regularMarketChangePercent?.raw || 0,
-        companyName: priceMod.shortName || priceMod.longName || ticker,
-        name: priceMod.shortName || priceMod.longName || ticker
-      },
-      fundamentals: {
-        trailingPE: sd.trailingPE?.raw || null,
-        forwardPE: sd.forwardPE?.raw || null,
-        priceToCashFlow: null,
-        pegRatio: ks.pegRatio?.raw || null,
-        grossMargin: fd.grossMargins?.raw ? safePercent(fd.grossMargins.raw * 100) : null,
-        operatingMargin: fd.operatingMargins?.raw ? safePercent(fd.operatingMargins.raw * 100) : null,
-        profitMargin: fd.profitMargins?.raw ? safePercent(fd.profitMargins.raw * 100) : null,
-        fcfMargin: null,
-        roe: fd.returnOnEquity?.raw ? safePercent(fd.returnOnEquity.raw * 100) : null,
-        dividendYield: sd.dividendYield?.raw ? safePercent(sd.dividendYield.raw * 100) : null,
-        beta: sd.beta?.raw || null,
-        marketCap: priceMod.marketCap?.raw || sd.marketCap?.raw || null,
-        totalDebt: fd.totalDebt?.raw || null,
-        totalCash: fd.totalCash?.raw || null,
-        financials: []
-      }
-    };
+        const freshStockData: any = {
+          symbol: ticker,
+          quote: {
+            symbol: ticker,
+            price: priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
+            changesPercentage: priceMod.regularMarketChangePercent?.raw || 0,
+            companyName: priceMod.shortName || priceMod.longName || ticker,
+            name: priceMod.shortName || priceMod.longName || ticker,
+            marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0
+          },
+          fundamentals: {
+            trailingPE: sd.trailingPE?.raw || null,
+            forwardPE: sd.forwardPE?.raw || null,
+            marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
+            financials: [],
+            annualFinancials: [],
+            quarterlyFinancials: []
+          }
+        };
 
-    const mapHistory = (tsArr: any[], isQuarterly: boolean) => {
-      const prefix = isQuarterly ? "quarterly" : "annual";
-      
-      return tsArr
-        .map(item => {
-          const d = item.date;
-          // Core requested fields (2026 method)
-          const rev = extractRaw(item[`${prefix}TotalRevenue`]);
-          const netInc = extractRaw(item[`${prefix}NetIncome`]);
-          const assets = extractRaw(item[`${prefix}TotalAssets`]);
-          
-          // Supplemental fields for a premium UI experience
-          const gp = extractRaw(item[`${prefix}GrossProfit`]);
-          const opInc = extractRaw(item[`${prefix}OperatingIncome`]);
-          const liab = extractRaw(item[`${prefix}TotalLiabilitiesNetMinorityInterest`]);
-          const equity = extractRaw(item[`${prefix}StockholdersEquity`]);
-          const cash = extractRaw(item[`${prefix}CashAndCashEquivalents`]);
-          const debt = extractRaw(item[`${prefix}LongTermDebt`]);
-          const fcf = extractRaw(item[`${prefix}FreeCashFlow`]);
-          const ocf = extractRaw(item[`${prefix}OperatingCashFlow`]);
-          const re = extractRaw(item[`${prefix}RetainedEarnings`]);
-
-          return {
-            year: rowLabel({ date: d }, isQuarterly ? "quarter" : "annual"),
-            revenue: rev,
-            grossProfit: gp,
-            operatingIncome: opInc, 
-            netIncome: netInc,
-            researchAndDevelopment: 0,
-            totalAssets: assets,
-            totalLiabilities: liab || (assets - equity),
-            totalEquity: equity,
-            cash: cash,
-            debt: debt,
-            freeCashFlow: fcf, 
-            operatingCashFlow: ocf, 
-            retainedEarnings: re,
-            rawDate: new Date(d)
-          };
-        })
-        .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-    };
-
-    freshStockData.fundamentals.annualFinancials = mapHistory(annualTS, false);
-    freshStockData.fundamentals.quarterlyFinancials = mapHistory(quarterlyTS, true);
-    
-    freshStockData.fundamentals.financials = period === "annual" 
-      ? freshStockData.fundamentals.annualFinancials 
-      : freshStockData.fundamentals.quarterlyFinancials;
-
-    return freshStockData;
-  } catch (e: any) {
-    console.error(`[fetchStockDataFromAPI] Error for ${ticker}:`, e.message);
-    return { error: 'Yahoo Finance parsing failed', rateLimited: false, symbol: ticker };
-  }
+        return freshStockData;
+    } catch (e: any) {
+        console.error(`[Diagnostic fetch] Error for ${ticker}:`, e.message);
+        return { error: 'Yahoo Finance diagnostic failed', symbol: ticker };
+    }
 }
 
 export async function getFinancialData(
