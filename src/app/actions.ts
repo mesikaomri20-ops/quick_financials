@@ -52,8 +52,8 @@ export type YahooFundamentals = {
   marketCap: number | null;
   totalDebt: number | null;
   totalCash: number | null;
-  annual: FinancialYearData[];
-  quarterly: FinancialYearData[];
+  annual?: FinancialYearData[];
+  quarterly?: FinancialYearData[];
   financials: FinancialYearData[];
 };
 
