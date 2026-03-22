@@ -157,28 +157,27 @@ async function fetchStockDataFromAPI(
     try {
         console.log('Instance Created, fetching for:', symbol);
         // DIAGNOSTIC FETCH: price, summaryDetail, stats, and financials
-        const [rawData, quoteData]: any[] = await Promise.all([
+        const [results, quoteData]: any[] = await Promise.all([
             yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData'] }).catch(() => ({})),
             yf.quote(symbol).catch(() => null)
         ]);
-        console.log('--- RAW DATA FROM YAHOO ---', JSON.stringify(rawData).slice(0, 500));
+        console.log('FULL RESULTS:', JSON.stringify(results?.financialData));
 
-        const priceMod = rawData.price || {};
-        const sd = rawData.summaryDetail || {};
-        const fd = rawData.financialData || {};
-        const ks = rawData.defaultKeyStatistics || {};
+        const priceMod = results.price || {};
+        const sd = results.summaryDetail || {};
+        const fd = results.financialData || {};
+        const ks = results.defaultKeyStatistics || {};
 
         // Precise extraction as requested with explicit optional chaining
-        const totalCash = rawData?.financialData?.totalCash?.raw || 0;
-        const totalDebt = rawData?.financialData?.totalDebt?.raw || 0;
-        const grossMargins = (rawData?.financialData?.grossMargins?.raw * 100) || 0;
-        const operatingMargins = (rawData?.financialData?.operatingMargins?.raw * 100) || 0;
-        const returnOnEquity = (rawData?.financialData?.returnOnEquity?.raw * 100) || 0;
-        const trailingPE = rawData?.summaryDetail?.trailingPE?.raw || rawData?.summaryDetail?.trailingPE || 0;
-        const forwardPE = rawData?.summaryDetail?.forwardPE?.raw || rawData?.summaryDetail?.forwardPE || 0;
-        const pegRatio = rawData?.defaultKeyStatistics?.pegRatio?.raw || 0;
+        const totalCash = results.financialData?.totalCash?.raw || 0;
+        const totalDebt = results.financialData?.totalDebt?.raw || 0;
+        const grossMargins = (results.financialData?.grossMargins?.raw * 100) || 0;
+        const operatingMargins = (results.financialData?.operatingMargins?.raw * 100) || 0;
+        const returnOnEquity = (results.financialData?.returnOnEquity?.raw * 100) || 0;
+        const trailingPE = results.summaryDetail?.trailingPE?.raw || results.summaryDetail?.trailingPE || 0;
+        const forwardPE = results.summaryDetail?.forwardPE?.raw || results.summaryDetail?.forwardPE || 0;
+        const pegRatio = results.defaultKeyStatistics?.pegRatio?.raw || 0;
 
-        console.log('--- DIAGNOSTIC: financialData keys ---', Object.keys(fd));
         console.log('Financials Mapped:', { ticker, totalCash, grossMargins, trailingPE });
 
         const freshStockData: any = {
@@ -198,11 +197,11 @@ async function fetchStockDataFromAPI(
             pegRatio,
             grossMargin: grossMargins,
             operatingMargin: operatingMargins,
-            profitMargin: (rawData?.financialData?.profitMargins?.raw * 100) || 0,
+            profitMargin: (results.financialData?.profitMargins?.raw * 100) || 0,
             fcfMargin: null,
             roe: returnOnEquity,
-            dividendYield: (rawData?.summaryDetail?.dividendYield?.raw * 100) || 0,
-            beta: rawData?.summaryDetail?.beta?.raw || null,
+            dividendYield: (results.summaryDetail?.dividendYield?.raw * 100) || 0,
+            beta: results.summaryDetail?.beta?.raw || null,
             marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
             totalDebt,
             totalCash,
