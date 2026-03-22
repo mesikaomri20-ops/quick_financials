@@ -168,6 +168,18 @@ async function fetchStockDataFromAPI(
         const fd = rawData.financialData || {};
         const ks = rawData.defaultKeyStatistics || {};
 
+        // Precise extraction as requested
+        const totalCash = fd.totalCash?.raw || 0;
+        const totalDebt = fd.totalDebt?.raw || 0;
+        const grossMargins = (fd.grossMargins?.raw * 100) || 0;
+        const operatingMargins = (fd.operatingMargins?.raw * 100) || 0;
+        const returnOnEquity = (fd.returnOnEquity?.raw * 100) || 0;
+        const trailingPE = sd.trailingPE?.raw || sd.trailingPE || 0;
+        const forwardPE = sd.forwardPE?.raw || sd.forwardPE || 0;
+        const pegRatio = ks.pegRatio?.raw || 0;
+
+        console.log('Financials Mapped:', { ticker, totalCash, grossMargins, trailingPE });
+
         const freshStockData: any = {
           symbol: ticker,
           quote: {
@@ -179,20 +191,20 @@ async function fetchStockDataFromAPI(
             marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0
           },
           fundamentals: {
-            trailingPE: sd.trailingPE?.raw || null,
-            forwardPE: sd.forwardPE?.raw || null,
+            trailingPE,
+            forwardPE,
             priceToCashFlow: null,
-            pegRatio: ks.pegRatio?.raw || null,
-            grossMargin: fd.grossMargins?.raw ? safePercent(fd.grossMargins.raw * 100) : null,
-            operatingMargin: fd.operatingMargins?.raw ? safePercent(fd.operatingMargins.raw * 100) : null,
-            profitMargin: fd.profitMargins?.raw ? safePercent(fd.profitMargins.raw * 100) : null,
+            pegRatio,
+            grossMargin: grossMargins,
+            operatingMargin: operatingMargins,
+            profitMargin: (fd.profitMargins?.raw * 100) || 0,
             fcfMargin: null,
-            roe: fd.returnOnEquity?.raw ? safePercent(fd.returnOnEquity.raw * 100) : null,
-            dividendYield: sd.dividendYield?.raw ? safePercent(sd.dividendYield.raw * 100) : null,
+            roe: returnOnEquity,
+            dividendYield: (sd.dividendYield?.raw * 100) || 0,
             beta: sd.beta?.raw || null,
             marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
-            totalDebt: fd.totalDebt?.raw || null,
-            totalCash: fd.totalCash?.raw || null,
+            totalDebt,
+            totalCash,
             financials: [],
             annualFinancials: [],
             quarterlyFinancials: []
