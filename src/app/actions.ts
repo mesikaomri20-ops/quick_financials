@@ -156,8 +156,11 @@ async function fetchStockDataFromAPI(
     const symbol = ticker;
     try {
         console.log('Instance Created, fetching for:', symbol);
-        // DIAGNOSTIC FETCH: ONLY price and summaryDetail
-        const rawData: any = await yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
+        // DIAGNOSTIC FETCH: price, summaryDetail, and now quote for change percentage
+        const [rawData, quoteData]: any[] = await Promise.all([
+            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] }).catch(() => ({})),
+            yf.quote(symbol).catch(() => null)
+        ]);
         console.log('--- RAW DATA FROM YAHOO ---', JSON.stringify(rawData).slice(0, 500));
 
         const priceMod = rawData.price || {};
@@ -167,11 +170,11 @@ async function fetchStockDataFromAPI(
           symbol: ticker,
           quote: {
             symbol: ticker,
-            price: priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
-            changesPercentage: priceMod.regularMarketChangePercent?.raw || 0,
-            companyName: priceMod.shortName || priceMod.longName || ticker,
-            name: priceMod.shortName || priceMod.longName || ticker,
-            marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0
+            price: quoteData?.regularMarketPrice || priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
+            changesPercentage: quoteData?.regularMarketChangePercent || priceMod.regularMarketChangePercent?.raw || 0,
+            companyName: quoteData?.shortName || priceMod.shortName || priceMod.longName || ticker,
+            name: quoteData?.shortName || priceMod.longName || ticker,
+            marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0
           },
           fundamentals: {
             trailingPE: sd.trailingPE?.raw || null,
