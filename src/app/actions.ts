@@ -9,7 +9,15 @@ const FRED_BASE = "https://api.stlouisfed.org/fred";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-export type Stock = any;
+export interface Stock {
+  symbol: string;
+  quote: StockQuote | null;
+  fundamentals: YahooFundamentals | null;
+  quoteRateLimited?: boolean;
+  rateLimited?: boolean;
+  error?: string;
+}
+
 export type Period = "annual" | "quarter";
 
 export type StockQuote = {
@@ -53,17 +61,11 @@ export type YahooFundamentals = {
   marketCap: number | null;
   totalDebt: number | null;
   totalCash: number | null;
-  annualData?: FinancialYearData[];
-  quarterlyData?: FinancialYearData[];
+  annualFinancials?: FinancialYearData[];
+  quarterlyFinancials?: FinancialYearData[];
   financials: FinancialYearData[];
 };
 
-export type StockData = {
-  quote: StockQuote | null;
-  fundamentals: YahooFundamentals | null;
-  quoteRateLimited?: boolean;
-  rateLimited?: boolean;
-};
 
 export type MacroObservation = {
   date: string;
@@ -118,11 +120,12 @@ function rowLabel(row: any, period: Period): string {
 export async function getStockData(
   symbol: string,
   period: Period = "annual"
-): Promise<StockData | null> {
+): Promise<Stock | null> {
   const ticker = symbol.toUpperCase().trim();
   const docRef = doc(db, "stocks", ticker);
   
   try {
+    /* 
     const docSnap = await getDoc(docRef);
     const data = docSnap.exists() ? docSnap.data() : null;
     const now = Date.now();
@@ -132,27 +135,12 @@ export async function getStockData(
 
     if (!data || isPriceStale || isFinancialsStale) {
       const freshData = await fetchStockDataFromAPI(ticker, data, isPriceStale, isFinancialsStale, period);
-      
-      if (freshData && !freshData.error && !freshData.rateLimited) {
-        const dataToSave = {
-          ...freshData,
-          lastUpdatedPrice: isPriceStale ? now : data?.lastUpdatedPrice || now,
-          lastUpdatedFinancials: isFinancialsStale ? now : data?.lastUpdatedFinancials || now,
-        };
-        // Save without awaiting to avoid blocking return
-        setDoc(docRef, dataToSave, { merge: true }).catch(console.error);
-        return freshData as StockData;
-      } else {
-        // API failed (e.g., rate limit), return stale data if available
-        if (data) {
-          console.warn(`[API Limit] Returning stale Firestore data for ${ticker}`);
-          return data as StockData;
-        }
-        return freshData; // Error state
-      }
+      ...
     }
+    */
     
-    return data as StockData;
+    // Direct call to Yahoo to bypass cache and get fresh data
+    return await fetchStockDataFromAPI(ticker, null, true, true, period);
   } catch (err) {
     console.error(`[Firestore Buffer] Error fetching ${ticker}:`, err);
     return await fetchStockDataFromAPI(ticker, null, true, true, period);
@@ -167,139 +155,111 @@ const safePercent = (val: number | null) => {
 
 async function fetchStockDataFromAPI(
   ticker: string,
-  existingData: any,
+  existingData: any, // Ignored for surgical fresh fetch
   fetchQuote: boolean,
   fetchFinancials: boolean,
   period: Period
 ): Promise<any> {
+  const yf = yahooFinance;
   try {
     const symbol = ticker;
-    let quote: any = null;
-    let summary: any = null;
+    const modules: any[] = [
+      'price', 
+      'summaryDetail', 
+      'financialData', 
+      'defaultKeyStatistics', 
+      'incomeStatementHistory', 
+      'incomeStatementHistoryQuarterly', 
+      'balanceSheetHistory', 
+      'balanceSheetHistoryQuarterly'
+    ];
+    
+    // Surgical fetch of exactly 8 modules
+    const stats = await yf.quoteSummary(symbol, { modules }).catch(() => ({}));
 
-    if (fetchQuote) {
-      quote = await yahooFinance.quote(symbol);
-    }
+    const priceMod = (stats as any).price || {};
+    const sd = (stats as any).summaryDetail || {};
+    const fd = (stats as any).financialData || {};
+    const ks = (stats as any).defaultKeyStatistics || {};
 
-    if (fetchFinancials) {
-      summary = {}; // We'll get everything from quoteSummary now
-    }
-
-    const freshStockData: any = existingData ? { ...existingData } : {
-      quote: { symbol: ticker, price: 0, changesPercentage: 0 },
+    const freshStockData: any = {
+      symbol: ticker,
+      quote: {
+        symbol: ticker,
+        price: priceMod.regularMarketPrice?.raw || 0,
+        changesPercentage: priceMod.regularMarketChangePercent?.raw || 0,
+        companyName: priceMod.shortName || priceMod.longName || ticker,
+        name: priceMod.shortName || priceMod.longName || ticker
+      },
       fundamentals: {
+        trailingPE: sd.trailingPE?.raw || null,
+        forwardPE: sd.forwardPE?.raw || null,
+        priceToCashFlow: null,
+        pegRatio: ks.pegRatio?.raw || null,
+        grossMargin: fd.grossMargins?.raw ? safePercent(fd.grossMargins.raw * 100) : null,
+        operatingMargin: fd.operatingMargins?.raw ? safePercent(fd.operatingMargins.raw * 100) : null,
+        profitMargin: fd.profitMargins?.raw ? safePercent(fd.profitMargins.raw * 100) : null,
+        fcfMargin: null,
+        roe: fd.returnOnEquity?.raw ? safePercent(fd.returnOnEquity.raw * 100) : null,
+        dividendYield: sd.dividendYield?.raw ? safePercent(sd.dividendYield.raw * 100) : null,
+        beta: sd.beta?.raw || null,
+        marketCap: priceMod.marketCap?.raw || sd.marketCap?.raw || null,
+        totalDebt: fd.totalDebt?.raw || null,
+        totalCash: fd.totalCash?.raw || null,
         financials: []
       }
     };
 
-    if (fetchQuote && quote) {
-      freshStockData.quote.price = quote.regularMarketPrice || freshStockData.quote.price;
-      freshStockData.quote.changesPercentage = quote.regularMarketChangePercent || freshStockData.quote.changesPercentage;
-      if (quote.shortName || quote.longName) {
-        freshStockData.quote.companyName = quote.shortName || quote.longName;
-        freshStockData.quote.name = quote.shortName || quote.longName;
-      }
-    }
+    const mapHistory = (incomeArr: any[], balanceArr: any[], isQuarterly: boolean) => {
+      const map = new Map();
+      const process = (arr: any[]) => arr?.forEach(item => {
+          const d = item.endDate || item.date;
+          if (!d) return;
+          const key = new Date(d).toISOString().split('T')[0];
+          map.set(key, { ...map.get(key), ...item });
+      });
+      process(incomeArr);
+      process(balanceArr);
 
-    if (fetchFinancials) {
-       const modules: any[] = [
-         'summaryDetail', 
-         'financialData', 
-         'defaultKeyStatistics', 
-         'price',
-         'incomeStatementHistory',
-         'incomeStatementHistoryQuarterly',
-         'balanceSheetHistory',
-         'balanceSheetHistoryQuarterly',
-         'cashflowStatementHistory',
-         'cashflowStatementHistoryQuarterly'
-       ];
-       const stats = await yahooFinance.quoteSummary(symbol, { modules }).catch(() => ({}));
-       
-       const sd = (stats as any).summaryDetail || {};
-       const fd = (stats as any).financialData || {};
-       const ks = (stats as any).defaultKeyStatistics || {};
-       const priceMod = (stats as any).price || {};
-       
-       if (!freshStockData.quote.companyName) {
-           freshStockData.quote.companyName = priceMod.shortName || priceMod.longName || ticker;
-           freshStockData.quote.name = priceMod.shortName || priceMod.longName || ticker;
-       }
+      return Array.from(map.values())
+        .map(item => {
+          const d = item.endDate || item.date;
+          const rev = item.totalRevenue?.raw || 0;
+          const gp = item.grossProfit?.raw || (rev - (item.costOfRevenue?.raw || 0));
+          
+          return {
+            year: rowLabel({ date: d }, isQuarterly ? "quarter" : "annual"),
+            revenue: rev,
+            grossProfit: gp,
+            operatingIncome: item.operatingIncome?.raw || 0,
+            netIncome: item.netIncome?.raw || item.netIncomeCommonStockholders?.raw || 0,
+            researchAndDevelopment: item.researchAndDevelopment?.raw || 0,
+            totalAssets: item.totalAssets?.raw || 0,
+            totalLiabilities: item.totalLiabilities?.raw || (item.totalAssets?.raw - (item.totalStockholderEquity?.raw || 0)) || 0,
+            totalEquity: item.totalStockholderEquity?.raw || 0,
+            cash: item.cash?.raw || item.cashAndCashEquivalents?.raw || 0,
+            debt: item.longTermDebt?.raw || item.totalDebt?.raw || 0,
+            freeCashFlow: 0, 
+            operatingCashFlow: 0, 
+            retainedEarnings: item.retainedEarnings?.raw || 0,
+            rawDate: new Date(d)
+          };
+        })
+        .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+    };
 
-       freshStockData.fundamentals = {
-          trailingPE: sd.trailingPE || null,
-          forwardPE: sd.forwardPE || null,
-          priceToCashFlow: null,
-          pegRatio: ks.pegRatio || null,
-          grossMargin: fd.grossMargins ? safePercent(fd.grossMargins * 100) : null,
-          operatingMargin: fd.operatingMargins ? safePercent(fd.operatingMargins * 100) : null,
-          profitMargin: fd.profitMargins ? safePercent(fd.profitMargins * 100) : null,
-          fcfMargin: null,
-          roe: fd.returnOnEquity ? safePercent(fd.returnOnEquity * 100) : null,
-          dividendYield: sd.dividendYield ? safePercent(sd.dividendYield * 100) : null,
-          beta: sd.beta || null,
-          marketCap: priceMod.marketCap || sd.marketCap || null,
-          totalDebt: fd.totalDebt || null,
-          totalCash: fd.totalCash || null,
-          financials: []
-       };
+    const ish = (stats as any).incomeStatementHistory?.incomeStatementHistory || [];
+    const ishQ = (stats as any).incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+    const bsh = (stats as any).balanceSheetHistory?.balanceSheetStatements || [];
+    const bshQ = (stats as any).balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
 
-       const mergeModules = (income: any[], balance: any[], cashflow: any[], isQuarterly: boolean) => {
-           const map = new Map();
-           const process = (arr: any[]) => arr?.forEach(item => {
-               const d = item.endDate || item.date;
-               if (!d) return;
-               const key = new Date(d).toISOString().split('T')[0];
-               map.set(key, { ...map.get(key), ...item });
-           });
-           process(income); process(balance); process(cashflow);
-           
-           return Array.from(map.values())
-               .map(item => {
-                   const d = item.endDate || item.date;
-                   const rev = item.totalRevenue || item.operatingRevenue || 0;
-                   const gp = item.grossProfit ?? (rev - (item.costOfRevenue || 0));
-                   const fcf = item.freeCashFlow ?? ((item.totalCashFromOperatingActivities || 0) + (item.capitalExpenditures || 0));
-                   
-                   return {
-                       year: rowLabel({ date: d }, isQuarterly ? "quarter" : "annual"),
-                       revenue: rev,
-                       grossProfit: gp,
-                       operatingIncome: item.operatingIncome || 0,
-                       netIncome: item.netIncome || item.netIncomeCommonStockholders || 0,
-                       researchAndDevelopment: item.researchAndDevelopment || 0,
-                       totalAssets: item.totalAssets || 0,
-                       totalLiabilities: item.totalLiabilities || (item.totalAssets - (item.totalStockholderEquity || 0)),
-                       totalEquity: item.totalStockholderEquity || 0,
-                       cash: item.cash || item.cashAndCashEquivalents || 0,
-                       debt: item.longTermDebt || item.totalDebt || 0,
-                       freeCashFlow: fcf,
-                       operatingCashFlow: item.totalCashFromOperatingActivities || 0,
-                       retainedEarnings: item.retainedEarnings || 0,
-                       rawDate: new Date(d)
-                   };
-               })
-               .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
-       };
-
-       const ish = (stats as any).incomeStatementHistory?.incomeStatementHistory || [];
-       const ishQ = (stats as any).incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
-       const bsh = (stats as any).balanceSheetHistory?.balanceSheetStatements || [];
-       const bshQ = (stats as any).balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
-       const cfh = (stats as any).cashflowStatementHistory?.cashflowStatements || [];
-       const cfhQ = (stats as any).cashflowStatementHistoryQuarterly?.cashflowStatements || [];
-
-       freshStockData.fundamentals.annualData = mergeModules(ish, bsh, cfh, false);
-       freshStockData.fundamentals.quarterlyData = mergeModules(ishQ, bshQ, cfhQ, true);
-       
-       freshStockData.fundamentals.financials = period === "annual" 
-           ? freshStockData.fundamentals.annualData 
-           : freshStockData.fundamentals.quarterlyData;
-    }
-
-    freshStockData.rateLimited = false;
-    freshStockData.quoteRateLimited = false;
+    freshStockData.fundamentals.annualFinancials = mapHistory(ish, bsh, false);
+    freshStockData.fundamentals.quarterlyFinancials = mapHistory(ishQ, bshQ, true);
     
+    freshStockData.fundamentals.financials = period === "annual" 
+      ? freshStockData.fundamentals.annualFinancials 
+      : freshStockData.fundamentals.quarterlyFinancials;
+
     return freshStockData;
   } catch (e: any) {
     console.error(`[fetchStockDataFromAPI] Error for ${ticker}:`, e.message);

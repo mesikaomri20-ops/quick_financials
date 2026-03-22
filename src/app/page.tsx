@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { getStockData, getMarketOverview, getBulkQuotes, getDashboardData, type StockData, type Period, type StockQuote } from "./actions";
+import { getStockData, getMarketOverview, getBulkQuotes, getDashboardData, type Stock, type Period, type StockQuote } from "./actions";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useCollection } from "react-firebase-hooks/firestore";
@@ -47,7 +47,7 @@ export default function Home() {
   const [tickerInput, setTickerInput] = useState("");
   const [currentTicker, setCurrentTicker] = useState("");
   const [period, setPeriod] = useState<Period>("annual");
-  const [data, setData] = useState<StockData | null>(null);
+  const [data, setData] = useState<Stock | null>(null);
   const [quoteState, setQuoteState] = useState<StockQuote | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -338,7 +338,7 @@ export default function Home() {
 
                 <div className="bg-card/20 backdrop-blur-xl border border-border-lux p-6 md:p-10 rounded-[3rem] shadow-2xl">
                    <FinancialCharts 
-                     financials={(period === "annual" ? fundamentals?.annualData : fundamentals?.quarterlyData) || []} 
+                     financials={(period === "annual" ? fundamentals?.annualFinancials : fundamentals?.quarterlyFinancials) || []} 
                      period={period} 
                    />
                 </div>
