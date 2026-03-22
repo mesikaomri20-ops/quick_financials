@@ -52,6 +52,8 @@ export type YahooFundamentals = {
   marketCap: number | null;
   totalDebt: number | null;
   totalCash: number | null;
+  annual: FinancialYearData[];
+  quarterly: FinancialYearData[];
   financials: FinancialYearData[];
 };
 
@@ -179,14 +181,21 @@ async function fetchStockDataFromAPI(
     }
 
     if (fetchFinancials) {
-      const type = period === "annual" ? "annual" : "quarterly";
-      const period1 = period === "annual" ? "2020-01-01" : "2023-01-01";
+      // Fetch both annual and quarterly in parallel for "Max History"
+      const [annualRes, quarterlyRes] = await Promise.all([
+        yahooFinance.fundamentalsTimeSeries(symbol, {
+          module: 'all',
+          type: 'annual',
+          period1: '2000-01-01' // Max history
+        }).catch(() => []),
+        yahooFinance.fundamentalsTimeSeries(symbol, {
+          module: 'all',
+          type: 'quarterly',
+          period1: '2000-01-01' // Max history
+        }).catch(() => [])
+      ]);
       
-      summary = await yahooFinance.fundamentalsTimeSeries(symbol, {
-        module: 'all',
-        type: type,
-        period1: period1
-      });
+      summary = { annual: annualRes, quarterly: quarterlyRes };
     }
 
     const freshStockData: any = existingData ? { ...existingData } : {
@@ -237,33 +246,39 @@ async function fetchStockDataFromAPI(
           financials: []
        };
 
-       if (Array.isArray(summary)) {
-           const financialArr: FinancialYearData[] = summary.map((item: any) => {
-               const rev = item.totalRevenue || item.operatingRevenue || 0;
-               const gp = item.grossProfit ?? (rev - (item.costOfRevenue || 0));
-               
-               // Yahoo Balance Sheet items often use netMinorityInterest suffix
-               const totalLiab = item.totalLiabilitiesNetMinorityInterest || (item.totalAssets - (item.stockholdersEquity || 0));
+       if (summary && summary.annual && summary.quarterly) {
+           const mapItems = (items: any[], isQuarterly: boolean) => {
+               return items.map((item: any) => {
+                   const rev = item.totalRevenue || item.operatingRevenue || 0;
+                   const gp = item.grossProfit ?? (rev - (item.costOfRevenue || 0));
+                   const totalLiab = item.totalLiabilitiesNetMinorityInterest || (item.totalAssets - (item.stockholdersEquity || 0));
+                   
+                   return {
+                       year: rowLabel({ date: item.date, period: item.periodType === '3M' ? null : item.periodType }, isQuarterly ? "quarter" : "annual"),
+                       revenue: rev,
+                       grossProfit: gp,
+                       operatingIncome: item.operatingIncome || 0,
+                       netIncome: item.netIncome || item.netIncomeCommonStockholders || 0,
+                       researchAndDevelopment: item.researchAndDevelopment || 0,
+                       totalAssets: item.totalAssets || 0,
+                       totalLiabilities: totalLiab,
+                       totalEquity: item.stockholdersEquity || 0,
+                       cash: item.cashAndCashEquivalents || 0,
+                       debt: item.totalDebt || 0,
+                       freeCashFlow: item.freeCashFlow || ((item.operatingCashFlow || 0) - Math.abs(item.capitalExpenditure || 0)),
+                       operatingCashFlow: item.operatingCashFlow || 0,
+                       retainedEarnings: item.retainedEarnings || 0
+                   };
+               }).sort((a,b) => a.year.localeCompare(b.year));
+           };
 
-               return {
-                   year: rowLabel({ date: item.date, period: item.periodType === '3M' ? null : item.periodType }, period),
-                   revenue: rev,
-                   grossProfit: gp,
-                   operatingIncome: item.operatingIncome || 0,
-                   netIncome: item.netIncome || item.netIncomeCommonStockholders || 0,
-                   researchAndDevelopment: item.researchAndDevelopment || 0,
-                   totalAssets: item.totalAssets || 0,
-                   totalLiabilities: totalLiab,
-                   totalEquity: item.stockholdersEquity || 0,
-                   cash: item.cashAndCashEquivalents || 0,
-                   debt: item.totalDebt || 0,
-                   freeCashFlow: item.freeCashFlow || ((item.operatingCashFlow || 0) - Math.abs(item.capitalExpenditure || 0)),
-                   operatingCashFlow: item.operatingCashFlow || 0,
-                   retainedEarnings: item.retainedEarnings || 0
-               };
-           });
+           freshStockData.fundamentals.annual = mapItems(summary.annual, false);
+           freshStockData.fundamentals.quarterly = mapItems(summary.quarterly, true);
            
-           freshStockData.fundamentals.financials = financialArr.sort((a,b) => a.year.localeCompare(b.year));
+           // Set primary financials based on the period arg for dual support
+           freshStockData.fundamentals.financials = period === "annual" 
+               ? freshStockData.fundamentals.annual 
+               : freshStockData.fundamentals.quarterly;
        }
     }
 
