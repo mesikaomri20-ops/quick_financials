@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { getStockData, getMarketOverview, getBulkQuotes, getDashboardData, type Stock, type Period, type StockQuote } from "./actions";
+import React, { useState, useEffect, useMemo } from "react";
+import { getStockData, getMarketOverview, getBulkQuotes, getDashboardData, type Stock, type Period } from "./actions";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useCollection } from "react-firebase-hooks/firestore";
 import { collection, query, orderBy } from "firebase/firestore";
-import { AlertCircle, TrendingUp, Activity } from "lucide-react";
+import { AlertCircle, TrendingUp } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, AreaChart, Area, ComposedChart
@@ -41,17 +41,17 @@ export default function Home() {
   const watchlistRef = user ? collection(db, "users", user.uid, "watchlist") : null;
   const [watchlistDocs] = useCollection(watchlistRef ? query(watchlistRef, orderBy("ticker")) : null);
 
-  const [marketOverview, setMarketOverview] = useState<StockQuote[]>([]);
-  const [watchlistQuotes, setWatchlistQuotes] = useState<StockQuote[]>([]);
+  const [marketOverview, setMarketOverview] = useState<Stock[]>([]);
+  const [watchlistQuotes, setWatchlistQuotes] = useState<Stock[]>([]);
 
   const [tickerInput, setTickerInput] = useState("");
   const [currentTicker, setCurrentTicker] = useState("");
   const [period, setPeriod] = useState<Period>("annual");
   const [data, setData] = useState<Stock | null>(null);
-  const [quoteState, setQuoteState] = useState<StockQuote | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
+
   const fetchData = async (symbol: string, p: Period) => {
     if (!symbol) return;
     setLoading(true);
@@ -61,25 +61,20 @@ export default function Home() {
     try {
       const result = await getStockData(symbol);
       
-      if (result && !('error' in result)) {
-        // Array Check (extra safety for FMP-style responses)
-        const safeData = Array.isArray(result) ? result[0] : result;
-        setData(safeData);
-        setQuoteState(safeData.quote);
-      } else if (result && (result as any).rateLimited) {
+      if (result && !result.error) {
+        // Flat data structure sync
+        setData(result);
+      } else if (result && result.error === 'rate-limited') {
         setRateLimited(true);
         setData(null);
-        setQuoteState(null);
       } else {
-        // UI Error Fallback
         setError(true);
         setData(null);
-        setQuoteState(null);
       }
     } catch (e) {
       console.error("Fetch failed:", e);
       setError(true);
-      setQuoteState({ name: 'Error Fallback', price: 0, symbol: 'ERR', changesPercentage: 0 } as any);
+      setData(null);
     } finally {
       setLoading(false);
     }
@@ -98,7 +93,6 @@ export default function Home() {
   // Unified Dashboard Hook
   useEffect(() => {
     let mounted = true;
-    // Wait for watchlist to load or confirm it's empty
     if (watchlistDocs === undefined && user) return; 
 
     async function loadDashboard() {
@@ -123,22 +117,19 @@ export default function Home() {
     if (globalIsFetching) return;
     
     if (tickerInput.trim()) {
-      try {
-        globalIsFetching = true;
-        setLoading(true);
-        const newTicker = tickerInput.trim().toUpperCase();
-        setCurrentTicker(newTicker);
-        setTickerInput("");
-        await fetchData(newTicker, period);
-      } finally {
-        setLoading(false);
-        globalIsFetching = false;
-      }
+      globalIsFetching = true;
+      setLoading(true);
+      const newTicker = tickerInput.trim().toUpperCase();
+      setCurrentTicker(newTicker);
+      setTickerInput("");
+      await fetchData(newTicker, period);
+      setLoading(false);
+      globalIsFetching = false;
     }
   };
 
-  const quote = quoteState;
-  const fundamentals = data?.fundamentals;
+  const quote = data;
+  const fundamentals = data;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center p-4 md:p-8 text-foreground transition-colors duration-300">
@@ -230,17 +221,13 @@ export default function Home() {
         <div className="w-full flex flex-col items-center animate-in fade-in zoom-in-95 duration-700">
 
             {/* Quote Card */}
-            {quote ? (
+            {quote && (
               <div className="bg-card/40 backdrop-blur-2xl border border-border-lux rounded-[2.5rem] shadow-2xl p-10 max-w-sm w-full mb-16 transform transition-all hover:scale-[1.01] duration-500 relative overflow-hidden group">
                 <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/5 rounded-full filter blur-[80px] -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors duration-700 pointer-events-none"></div>
                 
                 <div className="flex justify-between items-start mb-8 relative z-10">
                   <div className="flex flex-col">
                     <div className="flex items-center gap-4">
-                      {quote.image && (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img src={quote.image} alt="logo" className="w-12 h-12 rounded-2xl bg-white p-1.5 object-contain shadow-sm border border-foreground/5" />
-                      )}
                       <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none">
                         {quote.symbol}
                       </h1>
@@ -261,18 +248,18 @@ export default function Home() {
                 <div className="flex flex-col space-y-6 relative z-10">
                   <div className="flex justify-between items-end">
                     <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em] mb-1">Market Price</span>
-                    <span className="text-6xl font-extralight tracking-tighter">${quote.price.toFixed(2)}</span>
+                    <span className="text-6xl font-extralight tracking-tighter">${quote.price?.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center pt-6 border-t border-border-lux mt-4">
                     <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em]">Volatility 24H</span>
                     <span className={`text-2xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
                       {quote.changesPercentage > 0 ? "+" : ""}
-                      {quote.changesPercentage.toFixed(2)}%
+                      {quote.changesPercentage?.toFixed(2)}%
                     </span>
                   </div>
                 </div>
               </div>
-            ) : null}
+            )}
 
             {/* Fundamentals */}
             {fundamentals && (
@@ -286,7 +273,6 @@ export default function Home() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                   {/* Combined sections into cleaner grid */}
                    <StatGroup title="Valuation" color="emerald">
                       <StatItem label="P/E Current" value={formatValue(fundamentals.trailingPE)} />
                       <StatItem label="Forward P/E" value={formatValue(fundamentals.forwardPE)} />
@@ -299,11 +285,11 @@ export default function Home() {
                       <StatItem label="ROE" value={formatValue(fundamentals.roe, 'percent')} />
                    </StatGroup>
 
-                   <StatGroup title="Capital" color="gold">
-                      <StatItem label="Market Cap" value={formatValue(fundamentals.marketCap, 'large')} />
-                      <StatItem label="Total Debt" value={formatValue(fundamentals.totalDebt, 'large')} />
-                      <StatItem label="Total Cash" value={formatValue(fundamentals.totalCash, 'large')} />
-                   </StatGroup>
+                    <StatGroup title="Capital" color="gold">
+                       <StatItem label="Market Cap" value={formatValue(fundamentals.marketCap, 'large')} />
+                       <StatItem label="Total Debt" value={formatValue(fundamentals.totalDebt, 'large')} />
+                       <StatItem label="Total Cash" value={formatValue(fundamentals.totalCash, 'large')} />
+                    </StatGroup>
                 </div>
               </div>
             )}
@@ -338,7 +324,7 @@ export default function Home() {
 
                 <div className="bg-card/20 backdrop-blur-xl border border-border-lux p-6 md:p-10 rounded-[3rem] shadow-2xl">
                    <FinancialCharts 
-                     financials={(period === "annual" ? fundamentals?.annualFinancials : fundamentals?.quarterlyFinancials) || []} 
+                     financials={(period === "annual" ? data?.annualFinancials : data?.quarterlyFinancials) || []} 
                      period={period} 
                    />
                 </div>
@@ -378,27 +364,12 @@ function StatItem({ label, value }: { label: string, value: string }) {
   );
 }
 
-// ─── StatCard ──────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, prefix }: { label: string; value: string; prefix?: string }) {
-  const isFallback = value === "החברה לא מחלקת דיבידנד";
-  const displayValue = prefix && value !== "-" && !isFallback ? `${prefix}${value}` : value;
-  return (
-    <div className="bg-gray-900/80 border border-gray-800/80 rounded-xl p-3 shadow-md shadow-black/10 flex flex-col justify-center transition-all hover:bg-gray-800 hover:-translate-y-0.5 hover:border-gray-600 duration-200 relative group" dir="rtl">
-      <span className="text-[0.65rem] font-medium text-gray-400 uppercase tracking-widest mb-1.5 font-sans opacity-90 truncate leading-tight group-hover:text-emerald-400/80 transition-colors" title={label}>{label}</span>
-      <span className={`${isFallback ? 'text-[0.7rem] text-gray-500 font-medium pb-1' : 'text-lg font-black text-gray-100'} font-sans tracking-tight truncate`}>{displayValue}</span>
-    </div>
-  );
-}
-
 // ─── FinancialCharts ──────────────────────────────────────────────────────
 
 function FinancialCharts({ financials, period }: { financials: any[]; period: Period }) {
   const [enlargedChart, setEnlargedChart] = useState<string | null>(null);
-  // Track which dataKeys are hidden — toggled by clicking legend items
   const [hiddenSeries, setHiddenSeries] = useState<Record<string, boolean>>({});
 
-  // Reset hidden series when period changes so new chart starts clean
   useEffect(() => { setHiddenSeries({}); }, [period]);
 
   const toggleSeries = (dataKey: string) => {
@@ -437,16 +408,6 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
       if (idx === 0) return;
       const p = master[idx - 1];
       m.revYoY      = p.rev    ? ((m.rev    - p.rev)    / Math.abs(p.rev))    * 100 : 0;
-      m.netIncYoY   = p.netInc ? ((m.netInc - p.netInc) / Math.abs(p.netInc)) * 100 : 0;
-      m.grossYoY    = p.gross  ? ((m.gross  - p.gross)  / Math.abs(p.gross))  * 100 : 0;
-      m.opIncYoY    = p.opInc  ? ((m.opInc  - p.opInc)  / Math.abs(p.opInc))  * 100 : 0;
-      m.assetsYoY   = p.assets ? ((m.assets - p.assets) / Math.abs(p.assets)) * 100 : 0;
-      m.liabYoY     = p.liab   ? ((m.liab   - p.liab)   / Math.abs(p.liab))   * 100 : 0;
-      m.equityYoY   = p.equity ? ((m.equity - p.equity) / Math.abs(p.equity)) * 100 : 0;
-      m.cashYoY     = p.cash   ? ((m.cash   - p.cash)   / Math.abs(p.cash))   * 100 : 0;
-      m.debtYoY     = p.debt   ? ((m.debt   - p.debt)   / Math.abs(p.debt))   * 100 : 0;
-      m.fcfYoY      = p.fcf    ? ((m.fcf    - p.fcf)    / Math.abs(p.fcf))    * 100 : 0;
-      m.ocfYoY      = p.ocf    ? ((m.ocf    - p.ocf)    / Math.abs(p.ocf))    * 100 : 0;
     });
     return master;
   }, [financials]);
@@ -461,7 +422,6 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
     return val.toLocaleString();
   };
 
-  // ── Custom Tooltip ────────────────────────────────────────────────────────
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
     return (
@@ -489,8 +449,6 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
     );
   };
 
-  // ── Interactive Legend ─────────────────────────────────────────────────────
-  // Replaces Recharts' default <Legend /> — clicking a pill hides/shows that series
   const InteractiveLegend = ({ payload }: any) => (
     <div className="flex flex-wrap gap-2 justify-center mt-2 pb-1">
       {(payload ?? []).map((entry: any) => {
@@ -499,11 +457,8 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
           <button
             key={entry.dataKey}
             onClick={() => toggleSeries(entry.dataKey)}
-            title={hidden ? "Click to show" : "Click to hide"}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[0.65rem] font-semibold transition-all duration-150 select-none ${
-              hidden
-                ? "opacity-35 border-gray-700 bg-transparent text-gray-500 line-through"
-                : "opacity-100 border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700"
+              hidden ? "opacity-35 border-gray-700 bg-transparent text-gray-500 line-through" : "opacity-100 border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700"
             }`}
           >
             <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: entry.color }} />
@@ -514,12 +469,10 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
     </div>
   );
 
-  // Axis tick formatter for quarterly: rotate if long label
   const xAxisProps = period === 'quarter'
     ? { dataKey: "year", stroke: "#9ca3af", fontSize: 9, tickLine: false, angle: -45, textAnchor: "end" as const, height: 60, interval: 0 }
     : { dataKey: "year", stroke: "#9ca3af", fontSize: 11, tickLine: false };
 
-  // ── Chart Bodies ──────────────────────────────────────────────────────────
   const renderChartBody = (id: string) => {
     const commonAxis = (
       <>
@@ -535,77 +488,51 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
         <BarChart data={data}>
           {commonAxis}
           <YAxis tickFormatter={fm} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={50} />
-          <Bar dataKey="rev"    name="הכנסות (Revenue)"       fill="#3b82f6" radius={[2,2,0,0]} hide={!!hiddenSeries['rev']} />
-          <Bar dataKey="gross"  name="רווח גולמי (Gross)"    fill="#8b5cf6" radius={[2,2,0,0]} hide={!!hiddenSeries['gross']} />
-          <Bar dataKey="opInc"  name="רווח תפעולי (Op Inc)"  fill="#eab308" radius={[2,2,0,0]} hide={!!hiddenSeries['opInc']} />
-          <Bar dataKey="netInc" name="רווח נקי (Net Inc)"    fill="#10b981" radius={[2,2,0,0]} hide={!!hiddenSeries['netInc']} />
+          <Bar dataKey="rev"    name="Revenue"       fill="#3b82f6" radius={[2,2,0,0]} hide={!!hiddenSeries['rev']} />
+          <Bar dataKey="gross"  name="Gross Profit"  fill="#8b5cf6" radius={[2,2,0,0]} hide={!!hiddenSeries['gross']} />
+          <Bar dataKey="opInc"  name="Op Income"     fill="#eab308" radius={[2,2,0,0]} hide={!!hiddenSeries['opInc']} />
+          <Bar dataKey="netInc" name="Net Income"    fill="#10b981" radius={[2,2,0,0]} hide={!!hiddenSeries['netInc']} />
         </BarChart>
       );
       case 'margins': return (
         <LineChart data={data}>
           {commonAxis}
           <YAxis tickFormatter={(v) => v + '%'} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={40} domain={[0, 'auto']} />
-          <Line type="monotone" dataKey="grossMargin" name="שולי גולמי"        stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries['grossMargin']} />
-          <Line type="monotone" dataKey="opMargin"    name="שולי תפעולי"       stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries['opMargin']} />
-          <Line type="monotone" dataKey="netMargin"   name="שולי נקי"          stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} hide={!!hiddenSeries['netMargin']} />
-          <Line type="monotone" dataKey="fcfMargin"   name="שולי תזרים חופשי" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries['fcfMargin']} />
+          <Line type="monotone" dataKey="grossMargin" name="Gross Margin" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries['grossMargin']} />
+          <Line type="monotone" dataKey="opMargin"    name="Op Margin"    stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} hide={!!hiddenSeries['opMargin']} />
+          <Line type="monotone" dataKey="netMargin"   name="Net Margin"   stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} hide={!!hiddenSeries['netMargin']} />
         </LineChart>
       );
       case 'balance': return (
         <BarChart data={data}>
           {commonAxis}
           <YAxis tickFormatter={fm} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={50} />
-          <Bar dataKey="assets" name="סך נכסים"         fill="#3b82f6" radius={[2,2,0,0]} hide={!!hiddenSeries['assets']} />
-          <Bar dataKey="liab"   name="סך התחייבויות"    fill="#f43f5e" radius={[2,2,0,0]} hide={!!hiddenSeries['liab']} />
-          <Bar dataKey="equity" name="הון עצמי"          fill="#10b981" radius={[2,2,0,0]} hide={!!hiddenSeries['equity']} />
+          <Bar dataKey="assets" name="Assets"      fill="#3b82f6" radius={[2,2,0,0]} hide={!!hiddenSeries['assets']} />
+          <Bar dataKey="liab"   name="Liabilities" fill="#f43f5e" radius={[2,2,0,0]} hide={!!hiddenSeries['liab']} />
+          <Bar dataKey="equity" name="Equity"      fill="#10b981" radius={[2,2,0,0]} hide={!!hiddenSeries['equity']} />
         </BarChart>
       );
       case 'liquidity': return (
         <ComposedChart data={data}>
           {commonAxis}
           <YAxis tickFormatter={fm} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={50} />
-          <Bar  dataKey="cash" name="סך מזומנים" fill="#10b981" radius={[2,2,0,0]} barSize={20} hide={!!hiddenSeries['cash']} />
-          <Line dataKey="debt" name="סך חוב"     stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} hide={!!hiddenSeries['debt']} />
+          <Bar  dataKey="cash" name="Cash" fill="#10b981" radius={[2,2,0,0]} barSize={20} hide={!!hiddenSeries['cash']} />
+          <Line dataKey="debt" name="Debt" stroke="#f43f5e" strokeWidth={3} dot={{ r: 4 }} hide={!!hiddenSeries['debt']} />
         </ComposedChart>
-      );
-      case 'retained': return (
-        <AreaChart data={data}>
-          <defs>
-            <linearGradient id="colorRetained" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.4} />
-              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          {commonAxis}
-          <YAxis tickFormatter={fm} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={50} />
-          <Area type="monotone" dataKey="retained" name="סך עודפים" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorRetained)" hide={!!hiddenSeries['retained']} />
-        </AreaChart>
-      );
-      case 'cashflow': return (
-        <BarChart data={data}>
-          {commonAxis}
-          <YAxis tickFormatter={fm} stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} width={50} />
-          <Bar dataKey="ocf" name="תזרים מפעילות שוטפת" fill="#3b82f6" radius={[2,2,0,0]} hide={!!hiddenSeries['ocf']} />
-          <Bar dataKey="fcf" name="תזרים מזומנים חופשי" fill="#10b981" radius={[2,2,0,0]} hide={!!hiddenSeries['fcf']} />
-        </BarChart>
       );
       default: return null;
     }
   };
 
-  // ── ChartCard ─────────────────────────────────────────────────────────────
   const ChartCard = ({ id, title }: { id: string; title: string }) => (
     <div className="bg-card/30 backdrop-blur-md p-4 rounded-2xl border border-border-lux shadow-md relative group">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-gray-200 font-bold bg-gray-800 px-3 py-1 rounded inline-block text-sm">{title}</h3>
         <button
           onClick={() => setEnlargedChart(id)}
-          className="p-1.5 bg-gray-800 text-gray-400 rounded-lg hover:text-emerald-400 hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100 shadow-sm"
-          title="Enlarge Chart"
+          className="p-1.5 bg-gray-800 text-gray-400 rounded-lg hover:text-emerald-400 hover:bg-gray-700 transition-colors opacity-0 group-hover:opacity-100"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-          </svg>
+          <TrendingUp className="w-4 h-4" />
         </button>
       </div>
       <div className="h-64">
@@ -619,15 +546,12 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" dir="ltr">
-        <ChartCard id="profit"   title="Profitability Flow (הכנסות ורווחים)" />
-        <ChartCard id="margins"  title="Profit Margins (שולי רווחיות)" />
-        <ChartCard id="balance"  title="Balance Sheet (מאזן)" />
-        <ChartCard id="liquidity" title="Liquidity (נזילות וחוב)" />
-        <ChartCard id="retained" title="Retained Earnings (סך עודפים)" />
-        <ChartCard id="cashflow" title="Cash Flow (תזרימי מזומנים)" />
+        <ChartCard id="profit"    title="Profitability" />
+        <ChartCard id="margins"   title="Margins" />
+        <ChartCard id="balance"   title="Balance Sheet" />
+        <ChartCard id="liquidity" title="Liquidity" />
       </div>
 
-      {/* Enlarged modal */}
       {enlargedChart && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200" dir="ltr">
           <div className="bg-gray-950 border border-gray-800 rounded-3xl w-full max-w-6xl h-[80vh] flex flex-col shadow-2xl relative">
@@ -635,9 +559,7 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
               onClick={() => setEnlargedChart(null)}
               className="absolute top-6 right-6 p-2 bg-gray-800 text-gray-400 rounded-full hover:text-rose-400 hover:bg-gray-700 transition-colors z-10 shadow-lg"
             >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <AlertCircle className="w-6 h-6 rotate-45" />
             </button>
             <div className="flex-1 p-8 w-full h-full pt-16">
               <ResponsiveContainer width="100%" height="100%">
@@ -650,3 +572,4 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
     </>
   );
 }
+"

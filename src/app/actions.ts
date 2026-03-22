@@ -11,23 +11,28 @@ const FRED_BASE = "https://api.stlouisfed.org/fred";
 
 export interface Stock {
   symbol: string;
-  quote: StockQuote | null;
-  fundamentals: YahooFundamentals | null;
-  quoteRateLimited?: boolean;
-  rateLimited?: boolean;
-  error?: string;
-}
-
-export type Period = "annual" | "quarter";
-
-export type StockQuote = {
-  symbol: string;
   price: number;
   changesPercentage: number;
   companyName?: string;
   name?: string;
   image?: string;
-};
+  marketCap: number;
+  totalCash: number;
+  totalDebt: number;
+  trailingPE: number | null;
+  forwardPE: number | null;
+  pegRatio: number | null;
+  grossMargin: number | null;
+  operatingMargin: number | null;
+  roe: number | null;
+  dividendYield: number | null;
+  beta: number | null;
+  annualFinancials: any[];
+  quarterlyFinancials: any[];
+  error?: string;
+}
+
+export type Period = "annual" | "quarter";
 
 export type FinancialYearData = {
   year: string;
@@ -148,82 +153,69 @@ const safePercent = (val: number | null) => {
 
 async function fetchStockDataFromAPI(
   ticker: string,
-  existingData: any, // Ignored for diagnostic
+  existingData: any, 
   fetchQuote: boolean,
   fetchFinancials: boolean,
   period: Period
 ): Promise<any> {
     const symbol = ticker;
+    // 1. Fresh Instance Inside the Action
+    const yf = new YahooFinance();
+    
     try {
-        console.log('Instance Created, fetching for:', symbol);
-        // DIAGNOSTIC FETCH: price, summaryDetail, stats, and financials
+        console.log('--- DIAGNOSTIC START ---', symbol);
+        // 2 Fetch Everything
         const [results, quoteData]: any[] = await Promise.all([
-            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData'] }).catch(() => ({})),
+            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail', 'financialData', 'defaultKeyStatistics'] }).catch(() => ({})),
             yf.quote(symbol).catch(() => null)
         ]);
-        console.log('FULL RESULTS:', JSON.stringify(results?.financialData));
+
+        // 3. Logic Check Logs
+        console.log('DEBUG - Raw Cash:', results.financialData?.totalCash);
+        console.log('DEBUG - Raw PE:', results.summaryDetail?.trailingPE);
 
         const priceMod = results.price || {};
         const sd = results.summaryDetail || {};
         const fd = results.financialData || {};
         const ks = results.defaultKeyStatistics || {};
 
-        // Precise extraction as requested with explicit optional chaining
-        const totalCash = results.financialData?.totalCash?.raw || 0;
-        const totalDebt = results.financialData?.totalDebt?.raw || 0;
-        const grossMargins = (results.financialData?.grossMargins?.raw * 100) || 0;
-        const operatingMargins = (results.financialData?.operatingMargins?.raw * 100) || 0;
-        const returnOnEquity = (results.financialData?.returnOnEquity?.raw * 100) || 0;
-        const trailingPE = results.summaryDetail?.trailingPE?.raw || results.summaryDetail?.trailingPE || 0;
-        const forwardPE = results.summaryDetail?.forwardPE?.raw || results.summaryDetail?.forwardPE || 0;
-        const pegRatio = results.defaultKeyStatistics?.pegRatio?.raw || 0;
-
-        console.log('Financials Mapped:', { ticker, totalCash, grossMargins, trailingPE });
-
-        const freshStockData: any = {
+        // 4 & 5. Flatten the Return (processedData)
+        const processedData: any = {
           symbol: ticker,
-          quote: {
-            symbol: ticker,
-            price: quoteData?.regularMarketPrice || priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
-            changesPercentage: quoteData?.regularMarketChangePercent || priceMod.regularMarketChangePercent?.raw || 0,
-            companyName: quoteData?.shortName || priceMod.shortName || priceMod.longName || ticker,
-            name: quoteData?.shortName || priceMod.longName || ticker,
-            marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0
-          },
-          fundamentals: {
-            trailingPE,
-            forwardPE,
-            priceToCashFlow: null,
-            pegRatio,
-            grossMargin: grossMargins,
-            operatingMargin: operatingMargins,
-            profitMargin: (results.financialData?.profitMargins?.raw * 100) || 0,
-            fcfMargin: null,
-            roe: returnOnEquity,
-            dividendYield: (results.summaryDetail?.dividendYield?.raw * 100) || 0,
-            beta: results.summaryDetail?.beta?.raw || null,
-            marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
-            totalDebt,
-            totalCash,
-            financials: [],
-            annualFinancials: [],
-            quarterlyFinancials: []
-          }
+          price: quoteData?.regularMarketPrice || priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
+          changesPercentage: quoteData?.regularMarketChangePercent || priceMod.regularMarketChangePercent?.raw || 0,
+          companyName: quoteData?.shortName || priceMod.shortName || priceMod.longName || ticker,
+          name: quoteData?.shortName || ticker,
+          
+          marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
+          totalCash: fd.totalCash?.raw || 0,
+          totalDebt: fd.totalDebt?.raw || 0,
+          trailingPE: sd.trailingPE?.raw || sd.trailingPE || 0,
+          forwardPE: sd.forwardPE?.raw || sd.forwardPE || 0,
+          pegRatio: ks.pegRatio?.raw || 0,
+          grossMargin: (fd.grossMargins?.raw || 0) * 100,
+          operatingMargin: (fd.operatingMargins?.raw || 0) * 100,
+          roe: (fd.returnOnEquity?.raw || 0) * 100,
+          dividendYield: (sd.dividendYield?.raw || 0) * 100,
+          beta: sd.beta?.raw || null,
+          
+          annualFinancials: [],
+          quarterlyFinancials: []
         };
 
-        return freshStockData;
+        return processedData;
     } catch (e: any) {
-        console.error(`[Diagnostic fetch] Error for ${ticker}:`, e.message);
-        return { error: 'Yahoo Finance diagnostic failed', symbol: ticker };
+        console.error(`[Flat Fetch] Error for ${ticker}:`, e.message);
+        return { error: 'Yahoo Finance flat fetch failed', symbol: ticker };
     }
 }
 
 export async function getFinancialData(
   symbol: string,
   period: Period = "annual"
-): Promise<YahooFundamentals | null> {
+): Promise<any> {
   const data = await getStockData(symbol, period);
-  return data?.fundamentals || null;
+  return data; // Now returns flat object
 }
 
 // ─── Macro Data (FRED) ──────────────────────────────────────────────────────
@@ -346,16 +338,16 @@ export async function getYieldCurveData(): Promise<YieldCurvePoint[]> {
   }
 }
 
-export async function getMarketOverview(): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
+export async function getMarketOverview(): Promise<{ rateLimited: boolean; data: Stock[] }> {
   try {
     const symbols = ["SPY", "QQQ", "GLD"];
-    const quotes: StockQuote[] = [];
+    const quotes: Stock[] = [];
     let rateLimited = false;
     
     for (const sym of symbols) {
       const res = await getStockData(sym);
-      if (res && res.rateLimited) rateLimited = true;
-      if (res && res.quote && res.quote.price > 0) quotes.push(res.quote);
+      if (res && res.error === 'rate-limited') rateLimited = true;
+      if (res && res.price > 0) quotes.push(res);
     }
 
     return { rateLimited, data: quotes };
@@ -364,16 +356,16 @@ export async function getMarketOverview(): Promise<{ rateLimited: boolean; data:
   }
 }
 
-export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
+export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: boolean; data: Stock[] }> {
   if (!symbols || symbols.length === 0) return { rateLimited: false, data: [] };
   try {
-    const quotes: StockQuote[] = [];
+    const quotes: Stock[] = [];
     let rateLimited = false;
     
     for (const sym of symbols) {
       const res = await getStockData(sym);
-      if (res && res.rateLimited) rateLimited = true;
-      if (res && res.quote && res.quote.price > 0) quotes.push(res.quote);
+      if (res && res.error === 'rate-limited') rateLimited = true;
+      if (res && res.price > 0) quotes.push(res);
     }
 
     return { rateLimited, data: quotes };
