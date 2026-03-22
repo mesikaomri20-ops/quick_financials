@@ -28,6 +28,15 @@ export interface Stock {
     annualFinancials: any[];
     quarterlyFinancials: any[];
   };
+  marketCap?: number;
+  trailingPE?: number;
+  forwardPE?: number;
+  totalCash?: number;
+  totalDebt?: number;
+  grossMargin?: number;
+  operatingMargin?: number;
+  roe?: number;
+  pegRatio?: number;
   error?: string;
 }
 
@@ -240,6 +249,17 @@ async function fetchStockDataFromAPI(
 
         // 3. Console Log
         console.log('FINAL OBJECT SENT TO UI:', JSON.stringify(stock.fundamentals));
+
+        // Flat fallbacks for UI compatibility
+        stock.marketCap = stock.fundamentals.marketCap;
+        stock.trailingPE = stock.fundamentals.trailingPE;
+        stock.forwardPE = stock.fundamentals.forwardPE;
+        stock.totalCash = stock.fundamentals.totalCash;
+        stock.totalDebt = stock.fundamentals.totalDebt;
+        stock.grossMargin = stock.fundamentals.grossMargin;
+        stock.operatingMargin = stock.fundamentals.operatingMargin;
+        stock.roe = stock.fundamentals.roe;
+        stock.pegRatio = stock.fundamentals.pegRatio;
 
         return stock;
     } catch (e: any) {
