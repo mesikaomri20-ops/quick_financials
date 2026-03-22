@@ -3,7 +3,6 @@
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import yahooFinance from 'yahoo-finance2';
-yahooFinance.suppressNotices(['yahooSurvey']);
 const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 
@@ -233,40 +232,57 @@ async function fetchStockDataFromAPI(
            const bs = summary.balanceSheetHistory.balanceSheetStatements || [];
            const cs = summary.cashflowStatementHistory.cashflowStatements || [];
            
-           const yearsMap = new Map<string, any>();
+           const yearsMap = new Map<string, FinancialYearData>();
            
            is.forEach((statement: any) => {
                if (!statement.endDate) return;
                const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) yearsMap.set(year, { year });
-               const row = yearsMap.get(year);
-               row.revenue = statement.totalRevenue;
-               row.grossProfit = statement.grossProfit;
-               row.operatingIncome = statement.operatingIncome;
-               row.netIncome = statement.netIncome;
-               row.researchAndDevelopment = statement.researchDevelopment || 0;
+               if (!yearsMap.has(year)) {
+                   yearsMap.set(year, {
+                       year,
+                       revenue: 0,
+                       grossProfit: 0,
+                       operatingIncome: 0,
+                       netIncome: 0,
+                       researchAndDevelopment: 0,
+                       totalAssets: 0,
+                       totalLiabilities: 0,
+                       totalEquity: 0,
+                       cash: 0,
+                       debt: 0,
+                       freeCashFlow: 0,
+                       operatingCashFlow: 0,
+                       retainedEarnings: 0
+                   });
+               }
+               const row = yearsMap.get(year)!;
+               row.revenue = n(statement.totalRevenue);
+               row.grossProfit = n(statement.grossProfit);
+               row.operatingIncome = n(statement.operatingIncome);
+               row.netIncome = n(statement.netIncome);
+               row.researchAndDevelopment = n(statement.researchDevelopment);
            });
            
            bs.forEach((statement: any) => {
                if (!statement.endDate) return;
                const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) yearsMap.set(year, { year });
-               const row = yearsMap.get(year);
-               row.totalAssets = statement.totalAssets;
-               row.totalLiabilities = statement.totalLiab;
-               row.totalEquity = statement.totalStockholderEquity;
-               row.cash = statement.cash || statement.cashAndCashEquivalents || 0;
-               row.debt = statement.shortLongTermDebt || statement.longTermDebt || 0;
-               row.retainedEarnings = statement.retainedEarnings || 0;
+               if (!yearsMap.has(year)) return; // Should have been in IS
+               const row = yearsMap.get(year)!;
+               row.totalAssets = n(statement.totalAssets);
+               row.totalLiabilities = n(statement.totalLiab);
+               row.totalEquity = n(statement.totalStockholderEquity);
+               row.cash = n(statement.cash || statement.cashAndCashEquivalents);
+               row.debt = n(statement.shortLongTermDebt || statement.longTermDebt);
+               row.retainedEarnings = n(statement.retainedEarnings);
            });
 
            cs.forEach((statement: any) => {
                if (!statement.endDate) return;
                const year = new Date(statement.endDate).getFullYear().toString();
-               if (!yearsMap.has(year)) yearsMap.set(year, { year });
-               const row = yearsMap.get(year);
-               row.operatingCashFlow = statement.totalCashFromOperatingActivities || 0;
-               row.freeCashFlow = (statement.totalCashFromOperatingActivities || 0) + (statement.capitalExpenditures || 0);
+               if (!yearsMap.has(year)) return;
+               const row = yearsMap.get(year)!;
+               row.operatingCashFlow = n(statement.totalCashFromOperatingActivities);
+               row.freeCashFlow = n((statement.totalCashFromOperatingActivities || 0) + (statement.capitalExpenditures || 0));
            });
            
            const financialArr = Array.from(yearsMap.values()).sort((a,b) => parseInt(a.year) - parseInt(b.year));
