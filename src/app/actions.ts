@@ -168,16 +168,17 @@ async function fetchStockDataFromAPI(
         const fd = rawData.financialData || {};
         const ks = rawData.defaultKeyStatistics || {};
 
-        // Precise extraction as requested
-        const totalCash = fd.totalCash?.raw || 0;
-        const totalDebt = fd.totalDebt?.raw || 0;
-        const grossMargins = (fd.grossMargins?.raw * 100) || 0;
-        const operatingMargins = (fd.operatingMargins?.raw * 100) || 0;
-        const returnOnEquity = (fd.returnOnEquity?.raw * 100) || 0;
-        const trailingPE = sd.trailingPE?.raw || sd.trailingPE || 0;
-        const forwardPE = sd.forwardPE?.raw || sd.forwardPE || 0;
-        const pegRatio = ks.pegRatio?.raw || 0;
+        // Precise extraction as requested with explicit optional chaining
+        const totalCash = rawData?.financialData?.totalCash?.raw || 0;
+        const totalDebt = rawData?.financialData?.totalDebt?.raw || 0;
+        const grossMargins = (rawData?.financialData?.grossMargins?.raw * 100) || 0;
+        const operatingMargins = (rawData?.financialData?.operatingMargins?.raw * 100) || 0;
+        const returnOnEquity = (rawData?.financialData?.returnOnEquity?.raw * 100) || 0;
+        const trailingPE = rawData?.summaryDetail?.trailingPE?.raw || rawData?.summaryDetail?.trailingPE || 0;
+        const forwardPE = rawData?.summaryDetail?.forwardPE?.raw || rawData?.summaryDetail?.forwardPE || 0;
+        const pegRatio = rawData?.defaultKeyStatistics?.pegRatio?.raw || 0;
 
+        console.log('--- DIAGNOSTIC: financialData keys ---', Object.keys(fd));
         console.log('Financials Mapped:', { ticker, totalCash, grossMargins, trailingPE });
 
         const freshStockData: any = {
@@ -197,11 +198,11 @@ async function fetchStockDataFromAPI(
             pegRatio,
             grossMargin: grossMargins,
             operatingMargin: operatingMargins,
-            profitMargin: (fd.profitMargins?.raw * 100) || 0,
+            profitMargin: (rawData?.financialData?.profitMargins?.raw * 100) || 0,
             fcfMargin: null,
             roe: returnOnEquity,
-            dividendYield: (sd.dividendYield?.raw * 100) || 0,
-            beta: sd.beta?.raw || null,
+            dividendYield: (rawData?.summaryDetail?.dividendYield?.raw * 100) || 0,
+            beta: rawData?.summaryDetail?.beta?.raw || null,
             marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
             totalDebt,
             totalCash,
