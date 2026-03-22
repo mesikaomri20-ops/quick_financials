@@ -337,7 +337,10 @@ export default function Home() {
                 </div>
 
                 <div className="bg-card/20 backdrop-blur-xl border border-border-lux p-6 md:p-10 rounded-[3rem] shadow-2xl">
-                   <FinancialCharts financials={fundamentals.financials || []} period={period} />
+                   <FinancialCharts 
+                     financials={(period === "annual" ? fundamentals?.annualData : fundamentals?.quarterlyData) || []} 
+                     period={period} 
+                   />
                 </div>
               </div>
             )}
@@ -513,8 +516,8 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
 
   // Axis tick formatter for quarterly: rotate if long label
   const xAxisProps = period === 'quarter'
-    ? { dataKey: "year", stroke: "#9ca3af", fontSize: 10, tickLine: false, angle: -35, textAnchor: "end" as const, height: 50 }
-    : { dataKey: "year", stroke: "#9ca3af", fontSize: 12, tickLine: false };
+    ? { dataKey: "year", stroke: "#9ca3af", fontSize: 9, tickLine: false, angle: -45, textAnchor: "end" as const, height: 60, interval: 0 }
+    : { dataKey: "year", stroke: "#9ca3af", fontSize: 11, tickLine: false };
 
   // ── Chart Bodies ──────────────────────────────────────────────────────────
   const renderChartBody = (id: string) => {

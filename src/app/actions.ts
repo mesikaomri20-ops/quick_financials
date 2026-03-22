@@ -9,6 +9,7 @@ const FRED_BASE = "https://api.stlouisfed.org/fred";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+export type Stock = any;
 export type Period = "annual" | "quarter";
 
 export type StockQuote = {
@@ -52,8 +53,8 @@ export type YahooFundamentals = {
   marketCap: number | null;
   totalDebt: number | null;
   totalCash: number | null;
-  annual?: FinancialYearData[];
-  quarterly?: FinancialYearData[];
+  annualData?: FinancialYearData[];
+  quarterlyData?: FinancialYearData[];
   financials: FinancialYearData[];
 };
 
@@ -181,21 +182,7 @@ async function fetchStockDataFromAPI(
     }
 
     if (fetchFinancials) {
-      // Fetch both annual and quarterly in parallel for "Max History"
-      const [annualRes, quarterlyRes] = await Promise.all([
-        yahooFinance.fundamentalsTimeSeries(symbol, {
-          module: 'all',
-          type: 'annual',
-          period1: '2000-01-01' // Max history
-        }).catch(() => []),
-        yahooFinance.fundamentalsTimeSeries(symbol, {
-          module: 'all',
-          type: 'quarterly',
-          period1: '2000-01-01' // Max history
-        }).catch(() => [])
-      ]);
-      
-      summary = { annual: annualRes, quarterly: quarterlyRes };
+      summary = {}; // We'll get everything from quoteSummary now
     }
 
     const freshStockData: any = existingData ? { ...existingData } : {
@@ -214,8 +201,19 @@ async function fetchStockDataFromAPI(
       }
     }
 
-    if (fetchFinancials && summary) {
-       const modules: any[] = ['summaryDetail', 'financialData', 'defaultKeyStatistics', 'price'];
+    if (fetchFinancials) {
+       const modules: any[] = [
+         'summaryDetail', 
+         'financialData', 
+         'defaultKeyStatistics', 
+         'price',
+         'incomeStatementHistory',
+         'incomeStatementHistoryQuarterly',
+         'balanceSheetHistory',
+         'balanceSheetHistoryQuarterly',
+         'cashflowStatementHistory',
+         'cashflowStatementHistoryQuarterly'
+       ];
        const stats = await yahooFinance.quoteSummary(symbol, { modules }).catch(() => ({}));
        
        const sd = (stats as any).summaryDetail || {};
@@ -246,40 +244,57 @@ async function fetchStockDataFromAPI(
           financials: []
        };
 
-       if (summary && summary.annual && summary.quarterly) {
-           const mapItems = (items: any[], isQuarterly: boolean) => {
-               return items.map((item: any) => {
+       const mergeModules = (income: any[], balance: any[], cashflow: any[], isQuarterly: boolean) => {
+           const map = new Map();
+           const process = (arr: any[]) => arr?.forEach(item => {
+               const d = item.endDate || item.date;
+               if (!d) return;
+               const key = new Date(d).toISOString().split('T')[0];
+               map.set(key, { ...map.get(key), ...item });
+           });
+           process(income); process(balance); process(cashflow);
+           
+           return Array.from(map.values())
+               .map(item => {
+                   const d = item.endDate || item.date;
                    const rev = item.totalRevenue || item.operatingRevenue || 0;
                    const gp = item.grossProfit ?? (rev - (item.costOfRevenue || 0));
-                   const totalLiab = item.totalLiabilitiesNetMinorityInterest || (item.totalAssets - (item.stockholdersEquity || 0));
+                   const fcf = item.freeCashFlow ?? ((item.totalCashFromOperatingActivities || 0) + (item.capitalExpenditures || 0));
                    
                    return {
-                       year: rowLabel({ date: item.date, period: item.periodType === '3M' ? null : item.periodType }, isQuarterly ? "quarter" : "annual"),
+                       year: rowLabel({ date: d }, isQuarterly ? "quarter" : "annual"),
                        revenue: rev,
                        grossProfit: gp,
                        operatingIncome: item.operatingIncome || 0,
                        netIncome: item.netIncome || item.netIncomeCommonStockholders || 0,
                        researchAndDevelopment: item.researchAndDevelopment || 0,
                        totalAssets: item.totalAssets || 0,
-                       totalLiabilities: totalLiab,
-                       totalEquity: item.stockholdersEquity || 0,
-                       cash: item.cashAndCashEquivalents || 0,
-                       debt: item.totalDebt || 0,
-                       freeCashFlow: item.freeCashFlow || ((item.operatingCashFlow || 0) - Math.abs(item.capitalExpenditure || 0)),
-                       operatingCashFlow: item.operatingCashFlow || 0,
-                       retainedEarnings: item.retainedEarnings || 0
+                       totalLiabilities: item.totalLiabilities || (item.totalAssets - (item.totalStockholderEquity || 0)),
+                       totalEquity: item.totalStockholderEquity || 0,
+                       cash: item.cash || item.cashAndCashEquivalents || 0,
+                       debt: item.longTermDebt || item.totalDebt || 0,
+                       freeCashFlow: fcf,
+                       operatingCashFlow: item.totalCashFromOperatingActivities || 0,
+                       retainedEarnings: item.retainedEarnings || 0,
+                       rawDate: new Date(d)
                    };
-               }).sort((a,b) => a.year.localeCompare(b.year));
-           };
+               })
+               .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
+       };
 
-           freshStockData.fundamentals.annual = mapItems(summary.annual, false);
-           freshStockData.fundamentals.quarterly = mapItems(summary.quarterly, true);
-           
-           // Set primary financials based on the period arg for dual support
-           freshStockData.fundamentals.financials = period === "annual" 
-               ? freshStockData.fundamentals.annual 
-               : freshStockData.fundamentals.quarterly;
-       }
+       const ish = (stats as any).incomeStatementHistory?.incomeStatementHistory || [];
+       const ishQ = (stats as any).incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
+       const bsh = (stats as any).balanceSheetHistory?.balanceSheetStatements || [];
+       const bshQ = (stats as any).balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
+       const cfh = (stats as any).cashflowStatementHistory?.cashflowStatements || [];
+       const cfhQ = (stats as any).cashflowStatementHistoryQuarterly?.cashflowStatements || [];
+
+       freshStockData.fundamentals.annualData = mergeModules(ish, bsh, cfh, false);
+       freshStockData.fundamentals.quarterlyData = mergeModules(ishQ, bshQ, cfhQ, true);
+       
+       freshStockData.fundamentals.financials = period === "annual" 
+           ? freshStockData.fundamentals.annualData 
+           : freshStockData.fundamentals.quarterlyData;
     }
 
     freshStockData.rateLimited = false;
