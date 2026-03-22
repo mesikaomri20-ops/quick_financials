@@ -156,15 +156,17 @@ async function fetchStockDataFromAPI(
     const symbol = ticker;
     try {
         console.log('Instance Created, fetching for:', symbol);
-        // DIAGNOSTIC FETCH: price, summaryDetail, and now quote for change percentage
+        // DIAGNOSTIC FETCH: price, summaryDetail, stats, and financials
         const [rawData, quoteData]: any[] = await Promise.all([
-            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] }).catch(() => ({})),
+            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData'] }).catch(() => ({})),
             yf.quote(symbol).catch(() => null)
         ]);
         console.log('--- RAW DATA FROM YAHOO ---', JSON.stringify(rawData).slice(0, 500));
 
         const priceMod = rawData.price || {};
         const sd = rawData.summaryDetail || {};
+        const fd = rawData.financialData || {};
+        const ks = rawData.defaultKeyStatistics || {};
 
         const freshStockData: any = {
           symbol: ticker,
@@ -179,7 +181,18 @@ async function fetchStockDataFromAPI(
           fundamentals: {
             trailingPE: sd.trailingPE?.raw || null,
             forwardPE: sd.forwardPE?.raw || null,
-            marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
+            priceToCashFlow: null,
+            pegRatio: ks.pegRatio?.raw || null,
+            grossMargin: fd.grossMargins?.raw ? safePercent(fd.grossMargins.raw * 100) : null,
+            operatingMargin: fd.operatingMargins?.raw ? safePercent(fd.operatingMargins.raw * 100) : null,
+            profitMargin: fd.profitMargins?.raw ? safePercent(fd.profitMargins.raw * 100) : null,
+            fcfMargin: null,
+            roe: fd.returnOnEquity?.raw ? safePercent(fd.returnOnEquity.raw * 100) : null,
+            dividendYield: sd.dividendYield?.raw ? safePercent(sd.dividendYield.raw * 100) : null,
+            beta: sd.beta?.raw || null,
+            marketCap: quoteData?.marketCap || sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
+            totalDebt: fd.totalDebt?.raw || null,
+            totalCash: fd.totalCash?.raw || null,
             financials: [],
             annualFinancials: [],
             quarterlyFinancials: []
