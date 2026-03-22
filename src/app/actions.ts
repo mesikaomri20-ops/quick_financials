@@ -128,14 +128,19 @@ export async function getStockData(
 ): Promise<StockData | null> {
   const ticker = symbol.toUpperCase().trim();
   const limit  = "5";
-  const stmtP  = { symbol: ticker, period, limit };
+  const stmtP  = { period, limit };
 
   try {
     // 1. Sequential fetching with 2000ms delay to avoid 429
-    const incomeArr  = await fmpSafe("/income-statement",        stmtP); await sleep(2000);
-    const balanceArr = await fmpSafe("/balance-sheet-statement", stmtP); await sleep(2000);
-    const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP); await sleep(2000);
-    const quoteArr   = await fmpSafe("/quote", { symbol: ticker });
+    // Use the modernized post-Aug 2025 path-based endpoints for company financials
+    const incomeArr  = await fmpSafe(`/income-statement/${ticker}`,        stmtP); await sleep(2000);
+    const balanceArr = await fmpSafe(`/balance-sheet-statement/${ticker}`, stmtP); await sleep(2000);
+    const cashArr    = await fmpSafe(`/cash-flow-statement/${ticker}`,     stmtP); await sleep(2000);
+    const quoteArr   = await fmpSafe(`/quote/${ticker}`,                   {});
+    
+    // Attempt fetching profile since v3/quote does not guarantee logo any longer, although FMP might
+    // We fetch silently to decorate details
+    const profileArr = await fmpSafe(`/profile/${ticker}`, {});
     
     if (incomeArr?._error === 429 || balanceArr?._error === 429 || cashArr?._error === 429 || quoteArr?._error === 429) {
       return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
@@ -145,8 +150,15 @@ export async function getStockData(
     const bList = Array.isArray(balanceArr) ? balanceArr : [];
     const cList = Array.isArray(cashArr) ? cashArr : [];
     const qList = Array.isArray(quoteArr) ? quoteArr : [];
+    const pList = Array.isArray(profileArr) ? profileArr : [];
 
     const fmpQuote = qList[0] || {};
+    const fmpProfile = pList[0] || {};
+    
+    // Combine quote stats with richer profile
+    if (fmpProfile.companyName) fmpQuote.name = fmpProfile.companyName;
+    if (fmpProfile.image) fmpQuote.image = fmpProfile.image;
+
     if (iList.length === 0 && qList.length === 0) {
       console.error(`[getStockData] All fetches failed for ${ticker}. Check FMP_KEY.`);
       return { error: 'No data returned from FMP', symbol: ticker } as any;
