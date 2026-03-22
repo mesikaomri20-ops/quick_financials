@@ -93,21 +93,31 @@ const n = (val: any): number => { if (val === null || val === undefined || val =
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
 async function fmpSafe(path: string, params: Record<string, string>, cacheOptions: RequestInit = { cache: "no-store" }): Promise<any> {
+  console.log('FMP Key exists:', !!process.env.FMP_API_KEY);
   try {
-    const qs = new URLSearchParams({ ...params, apikey: FMP_KEY });
-    const url = `${FMP_BASE}${path}?${qs}`;
+    const key = process.env.FMP_API_KEY || FMP_KEY;
+    let url = `${FMP_BASE}${path}?apikey=${key}`;
+    for (const [k, v] of Object.entries(params)) {
+      url += `&${k}=${v}`;
+    }
     console.log('FMP URL:', url); // Server-side log
     const res = await fetch(url, cacheOptions);
     console.log('FMP Response Status:', res.status, 'Path:', path); // Server-side log
     if (res.status === 429) {
-      return { _error: 429 };
+      return { _error: 429, message: "Limit Exceeded" };
     }
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const text = await res.text();
+      return { _error: res.status, message: text };
+    }
     const json = await res.json();
+    if (json && json['Error Message']) {
+      return { _error: 403, message: json['Error Message'] };
+    }
     return Array.isArray(json) ? json : (json || []);
-  } catch (e) {
-    console.error(`[FMP] Error fetching ${path}:`, e);
-    return [];
+  } catch (e: any) {
+    console.error(`[FMP] Error fetching ${path}:`, e.message);
+    return { _error: 500, message: e.message };
   }
 }
 
@@ -136,29 +146,24 @@ export async function getStockData(
     const incomeArr  = await fmpSafe(`/income-statement/${ticker}`,        stmtP); await sleep(2000);
     const balanceArr = await fmpSafe(`/balance-sheet-statement/${ticker}`, stmtP); await sleep(2000);
     const cashArr    = await fmpSafe(`/cash-flow-statement/${ticker}`,     stmtP); await sleep(2000);
-    const quoteArr   = await fmpSafe(`/quote/${ticker}`,                   {});
+    const quoteArr   = await fmpSafe(`/profile/${ticker}`,                 {});
     
-    // Attempt fetching profile since v3/quote does not guarantee logo any longer, although FMP might
-    // We fetch silently to decorate details
-    const profileArr = await fmpSafe(`/profile/${ticker}`, {});
-    
-    if (incomeArr?._error === 429 || balanceArr?._error === 429 || cashArr?._error === 429 || quoteArr?._error === 429) {
-      return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
+    const checkErr = (arr: any) => arr && arr._error;
+    if (checkErr(incomeArr) || checkErr(balanceArr) || checkErr(cashArr) || checkErr(quoteArr)) {
+      const errObj = [incomeArr, balanceArr, cashArr, quoteArr].find(checkErr);
+      if (errObj._error === 429) {
+        return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
+      }
+      return { error: errObj.message || 'API Error', symbol: ticker } as any;
     }
 
     const iList = Array.isArray(incomeArr) ? incomeArr : [];
     const bList = Array.isArray(balanceArr) ? balanceArr : [];
     const cList = Array.isArray(cashArr) ? cashArr : [];
     const qList = Array.isArray(quoteArr) ? quoteArr : [];
-    const pList = Array.isArray(profileArr) ? profileArr : [];
 
     const fmpQuote = qList[0] || {};
-    const fmpProfile = pList[0] || {};
     
-    // Combine quote stats with richer profile
-    if (fmpProfile.companyName) fmpQuote.name = fmpProfile.companyName;
-    if (fmpProfile.image) fmpQuote.image = fmpProfile.image;
-
     if (iList.length === 0 && qList.length === 0) {
       console.error(`[getStockData] All fetches failed for ${ticker}. Check FMP_KEY.`);
       return { error: 'No data returned from FMP', symbol: ticker } as any;
@@ -237,9 +242,10 @@ export async function getStockData(
       quote: {
         symbol: fmpQuote.symbol || ticker,
         price: n(fmpQuote.price),
-        changesPercentage: n(fmpQuote.changesPercentage),
-        companyName: fmpQuote.name || ticker,
-        name: fmpQuote.name || ticker,
+        changesPercentage: n(fmpQuote.changesPercentage) || n(fmpQuote.changes),
+        companyName: fmpQuote.companyName || fmpQuote.name || ticker,
+        name: fmpQuote.companyName || fmpQuote.name || ticker,
+        image: fmpQuote.image,
       },
       fundamentals: {
         trailingPE: n(fmpQuote.pe) || null,
@@ -395,9 +401,18 @@ export async function getYieldCurveData(): Promise<YieldCurvePoint[]> {
 
 export async function getMarketOverview(): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
   try {
-    const data = await fmpSafe("/quote/SPY,QQQ,GLD,BTCUSD", {}, { next: { revalidate: 900 } });
+    const data = await fmpSafe("/profile/SPY,QQQ,GLD,BTCUSD", {}, { next: { revalidate: 900 } });
     if (data && data._error === 429) return { rateLimited: true, data: [] };
-    return { rateLimited: false, data: Array.isArray(data) ? data : [data].filter(Boolean) as any };
+    if (data && data._error) {
+      console.error("Market Overview Error:", data.message);
+      return { rateLimited: false, data: [] };
+    }
+    return { 
+      rateLimited: false, 
+      data: Array.isArray(data) 
+        ? data.map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) 
+        : [data].filter(Boolean).map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) as any 
+    };
   } catch (e) {
     return { rateLimited: false, data: [] };
   }
@@ -406,9 +421,18 @@ export async function getMarketOverview(): Promise<{ rateLimited: boolean; data:
 export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
   if (!symbols || symbols.length === 0) return { rateLimited: false, data: [] };
   try {
-    const data = await fmpSafe(`/quote/${symbols.join(',')}`, {});
+    const data = await fmpSafe(`/profile/${symbols.join(',')}`, {});
     if (data && data._error === 429) return { rateLimited: true, data: [] };
-    return { rateLimited: false, data: Array.isArray(data) ? data : [data].filter(Boolean) as any };
+    if (data && data._error) {
+      console.error("Bulk Quotes Error:", data.message);
+      return { rateLimited: false, data: [] };
+    }
+    return { 
+      rateLimited: false, 
+      data: Array.isArray(data) 
+        ? data.map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) 
+        : [data].filter(Boolean).map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) as any 
+    };
   } catch (e) {
     return { rateLimited: false, data: [] };
   }

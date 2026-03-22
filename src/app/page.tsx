@@ -77,13 +77,14 @@ export default function Home() {
         setQuoteState(null);
       } else {
         // Hardcoded Fallback for testing or server-side error
+        const errorMsg = result && 'error' in (result as any) ? (result as any).error : 'Test Mode';
         setData(null);
         setQuoteState({ 
-          name: result && 'error' in (result as any) ? (result as any).error : 'Test Mode', 
+          name: `Error: ${errorMsg}`,
+          companyName: `Error: ${errorMsg}`, 
           price: 999, 
-          symbol: 'TEST', 
-          changesPercentage: 1.5, 
-          companyName: 'No Data' 
+          symbol: 'ERR', 
+          changesPercentage: 0
         } as any);
       }
     } catch (e) {
