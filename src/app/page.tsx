@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { getStockData, getMarketOverview, getBulkQuotes, type StockData, type Period, type StockQuote } from "./actions";
+import { getStockData, getMarketOverview, getBulkQuotes, getDashboardData, type StockData, type Period, type StockQuote } from "./actions";
 import { auth, db } from "@/lib/firebase";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { useCollection } from "react-firebase-hooks/firestore";
@@ -22,7 +22,7 @@ function formatValue(
   if (formatType === 'date') return val.toString();
   const num = Number(val);
   if (isNaN(num)) return val.toString();
-  if (formatType === 'percent') return (num * 100).toFixed(1) + "%";
+  if (formatType === 'percent') return num.toFixed(1) + "%";
   if (formatType === 'large') {
     if (num >= 1e12) return (num / 1e12).toFixed(2) + "T";
     if (num >= 1e9)  return (num / 1e9).toFixed(2)  + "B";
@@ -95,34 +95,28 @@ export default function Home() {
     });
   }, [period, currentTicker]);
 
+  // Unified Dashboard Hook
   useEffect(() => {
     let mounted = true;
-    async function fetchOverview() {
-      const res = await getMarketOverview();
-      if (!mounted) return;
-      if (res.rateLimited) setRateLimited(true);
-      if (res.data) setMarketOverview(res.data);
-    }
-    fetchOverview();
-    return () => { mounted = false; };
-  }, []);
+    // Wait for watchlist to load or confirm it's empty
+    if (watchlistDocs === undefined && user) return; 
 
-  useEffect(() => {
-    let mounted = true;
-    if (watchlistDocs && watchlistDocs.docs.length > 0) {
-      const symbols = watchlistDocs.docs.map(d => d.data().ticker);
-      async function fetchWatchlist() {
-        const res = await getBulkQuotes(symbols);
+    async function loadDashboard() {
+      const symbols = watchlistDocs ? watchlistDocs.docs.map((d: any) => d.data().ticker) : [];
+      try {
+        const res = await getDashboardData(symbols);
         if (!mounted) return;
         if (res.rateLimited) setRateLimited(true);
-        if (res.data) setWatchlistQuotes(res.data);
+        if (res.overview) setMarketOverview(res.overview);
+        if (res.watchlist) setWatchlistQuotes(res.watchlist);
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
       }
-      fetchWatchlist();
-    } else if (watchlistDocs && watchlistDocs.docs.length === 0) {
-      setWatchlistQuotes([]);
     }
+    
+    loadDashboard();
     return () => { mounted = false; };
-  }, [watchlistDocs]);
+  }, [watchlistDocs, user]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();

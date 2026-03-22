@@ -1,7 +1,9 @@
 "use server";
 
-const ALPHA_KEY = process.env.ALPHAVANTAGE_API_KEY || "demo";
-const ALPHA_BASE = "https://www.alphavantage.co/query";
+import { db } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import yahooFinance from 'yahoo-finance2';
+yahooFinance.suppressNotices(['yahooSurvey']);
 const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 
@@ -89,35 +91,7 @@ export type YieldCurvePoint = {
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 const n = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-async function alphaSafe(func: string, params: Record<string, string>, cacheOptions: RequestInit = { cache: "no-store" }): Promise<any> {
-  const keySnippet = ALPHA_KEY ? ALPHA_KEY.slice(0, 5) + '...' : 'NONE';
-  console.log('Using Alpha Key:', keySnippet);
-  try {
-    const qs = new URLSearchParams({ function: func, apikey: ALPHA_KEY, ...params }).toString();
-    const url = `${ALPHA_BASE}?${qs}`;
-    console.log('Alpha URL:', url.replace(ALPHA_KEY, '***')); 
-    
-    const res = await fetch(url, cacheOptions);
-    if (!res.ok) {
-      const text = await res.text();
-      return { _error: res.status, message: text };
-    }
-    const json = await res.json();
-    if (json.Information && json.Information.includes('rate limit')) {
-      console.warn("AlphaVantage Rate Limit Reached:", json.Information);
-      return { _error: 429, message: "Rate limit exceeded" };
-    }
-    if (json["Error Message"]) {
-      return { _error: 400, message: json["Error Message"] };
-    }
-    return json;
-  } catch (e: any) {
-    console.error(`[AlphaVantage] Error fetching ${func}:`, e.message);
-    return { _error: 500, message: e.message };
-  }
-}
 
 function rowLabel(row: any, period: Period): string {
   const year = row.fiscalYear ? String(row.fiscalYear) : (row.calendarYear ? String(row.calendarYear) : (row.date ?? "").substring(0, 4));
@@ -135,72 +109,178 @@ export async function getStockData(
   period: Period = "annual"
 ): Promise<StockData | null> {
   const ticker = symbol.toUpperCase().trim();
-
+  const docRef = doc(db, "stocks", ticker);
+  
   try {
-    const quoteData = await alphaSafe("GLOBAL_QUOTE", { symbol: ticker });
-    await sleep(12000); // 12 seconds sleep to strict respect 5 req/min Alpha Limit
-    const overviewData = await alphaSafe("OVERVIEW", { symbol: ticker });
+    const docSnap = await getDoc(docRef);
+    const data = docSnap.exists() ? docSnap.data() : null;
+    const now = Date.now();
     
-    if (quoteData._error || overviewData._error) {
-      const errObj = quoteData._error ? quoteData : overviewData;
-      if (errObj._error === 429) {
-        return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
+    const isPriceStale = !data?.lastUpdatedPrice || (now - data.lastUpdatedPrice > 15 * 60 * 1000); // 15 mins
+    const isFinancialsStale = !data?.lastUpdatedFinancials || (now - data.lastUpdatedFinancials > 24 * 60 * 60 * 1000); // 24 hours
+
+    if (!data || isPriceStale || isFinancialsStale) {
+      const freshData = await fetchStockDataFromAPI(ticker, data, isPriceStale, isFinancialsStale);
+      
+      if (freshData && !freshData.error && !freshData.rateLimited) {
+        const dataToSave = {
+          ...freshData,
+          lastUpdatedPrice: isPriceStale ? now : data?.lastUpdatedPrice || now,
+          lastUpdatedFinancials: isFinancialsStale ? now : data?.lastUpdatedFinancials || now,
+        };
+        // Save without awaiting to avoid blocking return
+        setDoc(docRef, dataToSave, { merge: true }).catch(console.error);
+        return freshData as StockData;
+      } else {
+        // API failed (e.g., rate limit), return stale data if available
+        if (data) {
+          console.warn(`[API Limit] Returning stale Firestore data for ${ticker}`);
+          return data as StockData;
+        }
+        return freshData; // Error state
       }
-      return { error: errObj.message || 'API Error', symbol: ticker } as any;
+    }
+    
+    return data as StockData;
+  } catch (err) {
+    console.error(`[Firestore Buffer] Error fetching ${ticker}:`, err);
+    return await fetchStockDataFromAPI(ticker, null, true, true);
+  }
+}
+
+const safePercent = (val: number | null) => {
+  if (val === null) return null;
+  if (val > 100 || val < -100) return 0;
+  return val;
+};
+
+async function fetchStockDataFromAPI(
+  ticker: string,
+  existingData: any,
+  fetchQuote: boolean,
+  fetchFinancials: boolean
+): Promise<any> {
+  try {
+    const symbol = ticker;
+    let quote: any = null;
+    let summary: any = null;
+
+    if (fetchQuote) {
+      quote = await yahooFinance.quote(symbol);
     }
 
-    const gq = quoteData["Global Quote"] || {};
-    const price = n(gq["05. price"]);
-    const changePctStr = gq["10. change percent"] || "";
-    const changesPercentage = n(changePctStr.replace("%", ""));
-
-    const ov = overviewData || {};
-    const profileName = ov.Name || ticker;
-
-    if (!gq["05. price"] && !ov.Name) {
-      console.error(`[getStockData] All fetches failed or empty for ${ticker}.`);
-      return { error: 'No data returned from AlphaVantage', symbol: ticker } as any;
+    if (fetchFinancials) {
+      summary = await yahooFinance.quoteSummary(symbol, {
+        modules: [
+          'price', 
+          'summaryDetail', 
+          'financialData', 
+          'defaultKeyStatistics',
+          'incomeStatementHistory',
+          'balanceSheetHistory',
+          'cashflowStatementHistory'
+        ]
+      });
     }
 
-    const grossMargin = ov.GrossProfitTTM && ov.RevenueTTM ? (n(ov.GrossProfitTTM) / n(ov.RevenueTTM)) * 100 : null;
-
-    const safePercent = (val: number | null) => {
-      if (val === null) return null;
-      if (val > 100 || val < -100) return 0;
-      return val;
-    };
-
-    return {
-      quote: {
-        symbol: ticker,
-        price,
-        changesPercentage,
-        companyName: profileName,
-        name: profileName,
-      },
+    const freshStockData: any = existingData ? { ...existingData } : {
+      quote: { symbol: ticker, price: 0, changesPercentage: 0 },
       fundamentals: {
-        trailingPE: n(ov.TrailingPE) || null,
-        forwardPE: n(ov.ForwardPE) || null,
-        priceToCashFlow: null,
-        pegRatio: n(ov.PEGRatio) || null,
-        grossMargin: safePercent(grossMargin),
-        operatingMargin: safePercent(n(ov.OperatingMarginTTM) ? n(ov.OperatingMarginTTM) * 100 : null),
-        profitMargin: safePercent(n(ov.ProfitMargin) ? n(ov.ProfitMargin) * 100 : null),
-        fcfMargin: null,
-        roe: safePercent(n(ov.ReturnOnEquityTTM) ? n(ov.ReturnOnEquityTTM) * 100 : null),
-        dividendYield: safePercent(n(ov.DividendYield) ? n(ov.DividendYield) * 100 : null),
-        beta: n(ov.Beta) || null,
-        marketCap: n(ov.MarketCapitalization) || null,
-        totalDebt: null,
-        totalCash: null,
         financials: []
-      },
-      quoteRateLimited: false,
-      rateLimited: false
+      }
     };
-  } catch (e) {
-    console.error(`[getStockData] Error for ${ticker}:`, e);
-    return null;
+
+    if (fetchQuote && quote) {
+      freshStockData.quote.price = quote.regularMarketPrice || freshStockData.quote.price;
+      freshStockData.quote.changesPercentage = quote.regularMarketChangePercent || freshStockData.quote.changesPercentage;
+      if (quote.shortName || quote.longName) {
+        freshStockData.quote.companyName = quote.shortName || quote.longName;
+        freshStockData.quote.name = quote.shortName || quote.longName;
+      }
+    }
+
+    if (fetchFinancials && summary) {
+       const sd = summary.summaryDetail || {};
+       const fd = summary.financialData || {};
+       const ks = summary.defaultKeyStatistics || {};
+       const priceMod = summary.price || {};
+       
+       if (!freshStockData.quote.companyName) {
+           freshStockData.quote.companyName = priceMod.shortName || priceMod.longName || ticker;
+           freshStockData.quote.name = priceMod.shortName || priceMod.longName || ticker;
+       }
+
+       freshStockData.fundamentals = {
+          trailingPE: sd.trailingPE || null,
+          forwardPE: sd.forwardPE || null,
+          priceToCashFlow: null,
+          pegRatio: ks.pegRatio || null,
+          grossMargin: fd.grossMargins ? safePercent(fd.grossMargins * 100) : null,
+          operatingMargin: fd.operatingMargins ? safePercent(fd.operatingMargins * 100) : null,
+          profitMargin: fd.profitMargins ? safePercent(fd.profitMargins * 100) : null,
+          fcfMargin: null,
+          roe: fd.returnOnEquity ? safePercent(fd.returnOnEquity * 100) : null,
+          dividendYield: sd.dividendYield ? safePercent(sd.dividendYield * 100) : null,
+          beta: sd.beta || null,
+          marketCap: priceMod.marketCap || sd.marketCap || null,
+          totalDebt: fd.totalDebt || null,
+          totalCash: fd.totalCash || null,
+          financials: existingData?.fundamentals?.financials || []
+       };
+
+       if (summary.incomeStatementHistory && summary.balanceSheetHistory && summary.cashflowStatementHistory) {
+           const is = summary.incomeStatementHistory.incomeStatementHistory || [];
+           const bs = summary.balanceSheetHistory.balanceSheetStatements || [];
+           const cs = summary.cashflowStatementHistory.cashflowStatements || [];
+           
+           const yearsMap = new Map<string, any>();
+           
+           is.forEach((statement: any) => {
+               if (!statement.endDate) return;
+               const year = new Date(statement.endDate).getFullYear().toString();
+               if (!yearsMap.has(year)) yearsMap.set(year, { year });
+               const row = yearsMap.get(year);
+               row.revenue = statement.totalRevenue;
+               row.grossProfit = statement.grossProfit;
+               row.operatingIncome = statement.operatingIncome;
+               row.netIncome = statement.netIncome;
+               row.researchAndDevelopment = statement.researchDevelopment || 0;
+           });
+           
+           bs.forEach((statement: any) => {
+               if (!statement.endDate) return;
+               const year = new Date(statement.endDate).getFullYear().toString();
+               if (!yearsMap.has(year)) yearsMap.set(year, { year });
+               const row = yearsMap.get(year);
+               row.totalAssets = statement.totalAssets;
+               row.totalLiabilities = statement.totalLiab;
+               row.totalEquity = statement.totalStockholderEquity;
+               row.cash = statement.cash || statement.cashAndCashEquivalents || 0;
+               row.debt = statement.shortLongTermDebt || statement.longTermDebt || 0;
+               row.retainedEarnings = statement.retainedEarnings || 0;
+           });
+
+           cs.forEach((statement: any) => {
+               if (!statement.endDate) return;
+               const year = new Date(statement.endDate).getFullYear().toString();
+               if (!yearsMap.has(year)) yearsMap.set(year, { year });
+               const row = yearsMap.get(year);
+               row.operatingCashFlow = statement.totalCashFromOperatingActivities || 0;
+               row.freeCashFlow = (statement.totalCashFromOperatingActivities || 0) + (statement.capitalExpenditures || 0);
+           });
+           
+           const financialArr = Array.from(yearsMap.values()).sort((a,b) => parseInt(a.year) - parseInt(b.year));
+           freshStockData.fundamentals.financials = financialArr;
+       }
+    }
+
+    freshStockData.rateLimited = false;
+    freshStockData.quoteRateLimited = false;
+    
+    return freshStockData;
+  } catch (e: any) {
+    console.error(`[fetchStockDataFromAPI] Error for ${ticker}:`, e.message);
+    return { error: 'Yahoo Finance parsing failed', rateLimited: false, symbol: ticker };
   }
 }
 
@@ -334,38 +414,17 @@ export async function getYieldCurveData(): Promise<YieldCurvePoint[]> {
 
 export async function getMarketOverview(): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
   try {
-    const symbols = ["SPY", "QQQ", "GLD", "BTCUSD"];
+    const symbols = ["SPY", "QQQ", "GLD"];
     const quotes: StockQuote[] = [];
+    let rateLimited = false;
     
     for (const sym of symbols) {
-      if (sym === "BTCUSD") {
-         const res = await alphaSafe("CURRENCY_EXCHANGE_RATE", { from_currency: "BTC", to_currency: "USD" }, { next: { revalidate: 3600 } });
-         if (res && res._error === 429) return { rateLimited: true, data: [] };
-         const ex = res["Realtime Currency Exchange Rate"];
-         if (ex) {
-           quotes.push({
-             symbol: sym,
-             price: n(ex["5. Exchange Rate"]),
-             changesPercentage: 0, 
-           });
-         }
-      } else {
-         const res = await alphaSafe("GLOBAL_QUOTE", { symbol: sym }, { next: { revalidate: 3600 } });
-         if (res && res._error === 429) return { rateLimited: true, data: [] };
-         const gq = res["Global Quote"];
-         if (gq && gq["05. price"]) {
-           quotes.push({
-             symbol: sym,
-             price: n(gq["05. price"]),
-             changesPercentage: n((gq["10. change percent"] || "").replace("%", ""))
-           });
-         }
-      }
-      // Extremely strict sleep spacing for AlphaVantage limitations inside loops
-      await sleep(12000); 
+      const res = await getStockData(sym);
+      if (res && res.rateLimited) rateLimited = true;
+      if (res && res.quote && res.quote.price > 0) quotes.push(res.quote);
     }
 
-    return { rateLimited: false, data: quotes };
+    return { rateLimited, data: quotes };
   } catch (e) {
     return { rateLimited: false, data: [] };
   }
@@ -375,23 +434,28 @@ export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: b
   if (!symbols || symbols.length === 0) return { rateLimited: false, data: [] };
   try {
     const quotes: StockQuote[] = [];
+    let rateLimited = false;
     
     for (const sym of symbols) {
-      const res = await alphaSafe("GLOBAL_QUOTE", { symbol: sym }, { next: { revalidate: 3600 } });
-      if (res && res._error === 429) return { rateLimited: true, data: [] };
-      const gq = res["Global Quote"];
-      if (gq && gq["05. price"]) {
-        quotes.push({
-          symbol: sym,
-          price: n(gq["05. price"]),
-          changesPercentage: n((gq["10. change percent"] || "").replace("%", ""))
-        });
-      }
-      await sleep(12000); 
+      const res = await getStockData(sym);
+      if (res && res.rateLimited) rateLimited = true;
+      if (res && res.quote && res.quote.price > 0) quotes.push(res.quote);
     }
 
-    return { rateLimited: false, data: quotes };
+    return { rateLimited, data: quotes };
   } catch (e) {
     return { rateLimited: false, data: [] };
   }
+}
+
+export async function getDashboardData(watchlistSymbols: string[]) {
+  // Serialized forcing to respect strict API limits underneath
+  const overviewRes = await getMarketOverview();
+  const watchlistRes = await getBulkQuotes(watchlistSymbols);
+
+  return {
+    rateLimited: overviewRes.rateLimited || watchlistRes.rateLimited,
+    overview: overviewRes.data,
+    watchlist: watchlistRes.data
+  };
 }
