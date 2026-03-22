@@ -12,23 +12,22 @@ const FRED_BASE = "https://api.stlouisfed.org/fred";
 export interface Stock {
   symbol: string;
   price: number;
-  changesPercentage: number;
-  companyName?: string;
+  changePercent: number;
   name?: string;
-  image?: string;
-  marketCap: number;
-  totalCash: number;
-  totalDebt: number;
-  trailingPE: number | null;
-  forwardPE: number | null;
-  pegRatio: number | null;
-  grossMargin: number | null;
-  operatingMargin: number | null;
-  roe: number | null;
-  dividendYield: number | null;
-  beta: number | null;
-  annualFinancials: any[];
-  quarterlyFinancials: any[];
+  companyName?: string;
+  fundamentals: {
+    marketCap: number;
+    trailingPE: number;
+    forwardPE: number;
+    totalCash: number;
+    totalDebt: number;
+    grossMargin: number;
+    operatingMargin: number;
+    roe: number;
+    pegRatio: number;
+    annualFinancials: any[];
+    quarterlyFinancials: any[];
+  };
   error?: string;
 }
 
@@ -165,48 +164,87 @@ async function fetchStockDataFromAPI(
     try {
         console.log('--- DIAGNOSTIC START ---', symbol);
         // 2 Fetch Everything
+        const modules = [
+          'price', 'summaryDetail', 'financialData', 'defaultKeyStatistics',
+          'incomeStatementHistory', 'incomeStatementHistoryQuarterly',
+          'balanceSheetHistory', 'balanceSheetHistoryQuarterly',
+          'cashflowStatementHistory', 'cashflowStatementHistoryQuarterly'
+        ];
+
         const [results, quoteData]: any[] = await Promise.all([
-            yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail', 'financialData', 'defaultKeyStatistics'] }).catch(() => ({})),
+            yf.quoteSummary(symbol, { modules: modules as any[] }).catch(() => ({})),
             yf.quote(symbol).catch(() => null)
         ]);
-
-        // 3. Logic Check Logs
-        console.log('DEBUG - Raw Cash:', results.financialData?.totalCash);
-        console.log('DEBUG - Raw PE:', results.summaryDetail?.trailingPE);
 
         const priceMod = results.price || {};
         const sd = results.summaryDetail || {};
         const fd = results.financialData || {};
         const ks = results.defaultKeyStatistics || {};
 
-        // 4 & 5. Flatten the Return (processedData)
-        const processedData: any = {
-          symbol: ticker,
-          price: quoteData?.regularMarketPrice || priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
-          changesPercentage: quoteData?.regularMarketChangePercent || priceMod.regularMarketChangePercent?.raw || 0,
-          companyName: quoteData?.shortName || priceMod.shortName || priceMod.longName || ticker,
-          name: quoteData?.shortName || ticker,
-          
-          marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
-          totalCash: fd.totalCash?.raw || 0,
-          totalDebt: fd.totalDebt?.raw || 0,
-          trailingPE: sd.trailingPE?.raw || sd.trailingPE || 0,
-          forwardPE: sd.forwardPE?.raw || sd.forwardPE || 0,
-          pegRatio: ks.pegRatio?.raw || 0,
-          grossMargin: (fd.grossMargins?.raw || 0) * 100,
-          operatingMargin: (fd.operatingMargins?.raw || 0) * 100,
-          roe: (fd.returnOnEquity?.raw || 0) * 100,
-          dividendYield: (sd.dividendYield?.raw || 0) * 100,
-          beta: sd.beta?.raw || null,
-          
-          annualFinancials: [],
-          quarterlyFinancials: []
+        // Helper to process statements
+        const processStatements = (income: any[], balance: any[], cash: any[]) => {
+          if (!income) return [];
+          return income.map((item: any, idx: number) => {
+            const b = balance?.[idx] || {};
+            const c = cash?.[idx] || {};
+            return {
+              year: item.endDate ? new Date(item.endDate).getFullYear().toString() : "-",
+              revenue: item.totalRevenue?.raw || 0,
+              grossProfit: item.grossProfit?.raw || 0,
+              operatingIncome: item.operatingIncome?.raw || 0,
+              netIncome: item.netIncome?.raw || 0,
+              totalAssets: b.totalAssets?.raw || 0,
+              totalLiabilities: b.totalLiabilities?.raw || 0,
+              totalEquity: b.totalStockholderEquity?.raw || 0,
+              cash: b.cash?.raw || 0,
+              debt: (b.shortLongTermDebt?.raw || 0) + (b.longTermDebt?.raw || 0),
+              freeCashFlow: (c.totalCashFromOperatingActivities?.raw || 0) + (c.capitalExpenditures?.raw || 0),
+              operatingCashFlow: c.totalCashFromOperatingActivities?.raw || 0,
+            };
+          }).reverse();
         };
 
-        return processedData;
+        const annualFinancials = processStatements(
+          results.incomeStatementHistory?.incomeStatementHistory || [],
+          results.balanceSheetHistory?.balanceSheetStatements || [],
+          results.cashflowStatementHistory?.cashflowStatements || []
+        );
+
+        const quarterlyFinancials = processStatements(
+          results.incomeStatementHistoryQuarterly?.incomeStatementHistory || [],
+          results.balanceSheetHistoryQuarterly?.balanceSheetStatements || [],
+          results.cashflowStatementHistoryQuarterly?.cashflowStatements || []
+        );
+
+        // 1 & 2. Unified Object Structure & Mapping Logic
+        const stock: any = {
+          symbol: ticker,
+          price: quoteData?.regularMarketPrice || priceMod.regularMarketPrice?.raw || priceMod.regularMarketPrice || 0,
+          changePercent: quoteData?.regularMarketChangePercent || priceMod.regularMarketChangePercent?.raw || 0,
+          name: quoteData?.shortName || ticker,
+          companyName: quoteData?.shortName || priceMod.shortName || priceMod.longName || ticker,
+          fundamentals: {
+            marketCap: sd.marketCap?.raw || priceMod.marketCap?.raw || 0,
+            trailingPE: sd.trailingPE?.raw || sd.trailingPE || 0,
+            forwardPE: sd.forwardPE?.raw || sd.forwardPE || 0,
+            totalCash: fd.totalCash?.raw || 0,
+            totalDebt: fd.totalDebt?.raw || 0,
+            grossMargin: (fd.grossMargins?.raw || 0) * 100,
+            operatingMargin: (fd.operatingMargins?.raw || 0) * 100,
+            roe: (fd.returnOnEquity?.raw || 0) * 100,
+            pegRatio: ks.pegRatio?.raw || 0,
+            annualFinancials,
+            quarterlyFinancials
+          }
+        };
+
+        // 3. Console Log
+        console.log('FINAL OBJECT SENT TO UI:', JSON.stringify(stock.fundamentals));
+
+        return stock;
     } catch (e: any) {
-        console.error(`[Flat Fetch] Error for ${ticker}:`, e.message);
-        return { error: 'Yahoo Finance flat fetch failed', symbol: ticker };
+        console.error(`[Unified Fetch] Error for ${ticker}:`, e.message);
+        return { error: 'Yahoo Finance unified fetch failed', symbol: ticker };
     }
 }
 

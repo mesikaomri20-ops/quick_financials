@@ -129,7 +129,7 @@ export default function Home() {
   };
 
   const quote = data;
-  const fundamentals = data;
+  const fundamentals = data?.fundamentals;
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center p-4 md:p-8 text-foreground transition-colors duration-300">
@@ -156,8 +156,8 @@ export default function Home() {
               <div className="absolute top-0 right-0 w-24 h-24 bg-foreground/5 blur-[40px] -mr-8 -mt-8 group-hover:bg-foreground/10 transition-colors" />
               <div className="flex justify-between items-start relative z-10 mb-2">
                 <span className="text-sm font-bold tracking-widest text-foreground">{q.symbol}</span>
-                <span className={`text-[10px] font-black ${q.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                  {q.changesPercentage > 0 ? "+" : ""}{q.changesPercentage?.toFixed(2)}%
+                <span className={`text-[10px] font-black ${q.changePercent >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                  {q.changePercent > 0 ? "+" : ""}{q.changePercent?.toFixed(2)}%
                 </span>
               </div>
               <div className="relative z-10 flex items-baseline gap-1">
@@ -182,8 +182,8 @@ export default function Home() {
                 <span className="text-xs font-bold tracking-wider mb-1 text-foreground/80">{q.symbol}</span>
                 <div className="flex justify-between items-end">
                   <span className="text-lg font-light text-foreground">${q.price?.toFixed(2)}</span>
-                  <span className={`text-[9px] font-bold ${q.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                    {q.changesPercentage > 0 ? "+" : ""}{q.changesPercentage?.toFixed(2)}%
+                  <span className={`text-[9px] font-bold ${q.changePercent >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                    {q.changePercent > 0 ? "+" : ""}{q.changePercent?.toFixed(2)}%
                   </span>
                 </div>
               </div>
@@ -252,9 +252,9 @@ export default function Home() {
                   </div>
                   <div className="flex justify-between items-center pt-6 border-t border-border-lux mt-4">
                     <span className="text-foreground/40 text-[10px] font-black uppercase tracking-[0.2em]">Volatility 24H</span>
-                    <span className={`text-2xl font-bold flex items-center ${quote.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
-                      {quote.changesPercentage > 0 ? "+" : ""}
-                      {quote.changesPercentage?.toFixed(2)}%
+                    <span className={`text-2xl font-bold flex items-center ${quote.changePercent >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                      {quote.changePercent > 0 ? "+" : ""}
+                      {quote.changePercent?.toFixed(2)}%
                     </span>
                   </div>
                 </div>
@@ -286,9 +286,9 @@ export default function Home() {
                    </StatGroup>
 
                     <StatGroup title="Capital" color="gold">
-                       <StatItem label="Market Cap" value={formatValue(fundamentals.marketCap, 'large')} />
-                       <StatItem label="Total Debt" value={formatValue(fundamentals.totalDebt, 'large')} />
-                       <StatItem label="Total Cash" value={formatValue(fundamentals.totalCash, 'large')} />
+                       <StatItem label="Market Cap" value={formatValue(fundamentals?.marketCap, 'large')} />
+                       <StatItem label="Total Debt" value={formatValue(fundamentals?.totalDebt, 'large')} />
+                       <StatItem label="Total Cash" value={formatValue(fundamentals?.totalCash, 'large')} />
                     </StatGroup>
                 </div>
               </div>
@@ -324,7 +324,7 @@ export default function Home() {
 
                 <div className="bg-card/20 backdrop-blur-xl border border-border-lux p-6 md:p-10 rounded-[3rem] shadow-2xl">
                    <FinancialCharts 
-                     financials={(period === "annual" ? data?.annualFinancials : data?.quarterlyFinancials) || []} 
+                     financials={(period === "annual" ? fundamentals?.annualFinancials : fundamentals?.quarterlyFinancials) || []} 
                      period={period} 
                    />
                 </div>
