@@ -2,7 +2,8 @@
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import yf from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+const yf = new YahooFinance();
 const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 
@@ -154,6 +155,7 @@ async function fetchStockDataFromAPI(
 ): Promise<any> {
     const symbol = ticker;
     try {
+        console.log('Instance Created, fetching for:', symbol);
         // DIAGNOSTIC FETCH: ONLY price and summaryDetail
         const rawData: any = await yf.quoteSummary(symbol, { modules: ['price', 'summaryDetail'] });
         console.log('--- RAW DATA FROM YAHOO ---', JSON.stringify(rawData).slice(0, 500));
