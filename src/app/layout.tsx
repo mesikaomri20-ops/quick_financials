@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Geist_Mono } from "next/font/google";
+import { Inter, Playfair_Display } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({
@@ -7,18 +7,15 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Investment Command Center",
-  description: "Financial analysis dashboard",
+  title: "OMRI & OPAL | Our Story",
+  description: "A celebration of our journey together.",
 };
-
-import Sidebar from "@/components/Sidebar";
-import { ThemeProvider } from "@/components/theme-provider";
 
 export default function RootLayout({
   children,
@@ -26,22 +23,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${geistMono.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full flex bg-background text-foreground transition-colors duration-300">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <div className="flex w-full min-h-screen">
-            <Sidebar />
-            {/* Main Content Area */}
-            <main className="flex-1 overflow-x-hidden min-h-screen">
-              {children}
-            </main>
-          </div>
-        </ThemeProvider>
+    <html lang="en" className={`${inter.variable} ${playfair.variable} h-full antialiased`}>
+      <body className="min-h-full bg-background text-foreground transition-colors duration-500 overflow-x-hidden">
+        {/* Full-width content without legacy sidebar */}
+        <main className="w-full min-h-screen">
+          {children}
+        </main>
       </body>
     </html>
   );

@@ -11,7 +11,9 @@ import {
   Camera,
   Sparkles,
   ChevronRight,
-  User
+  User,
+  Menu,
+  X
 } from "lucide-react";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ const CameraHeart = () => (
 export default function Home() {
   const [user] = useAuthState(auth);
   const [activeTab, setActiveTab] = useState("HOME");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   // Countdown Logic
@@ -67,9 +70,11 @@ export default function Home() {
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center overflow-x-hidden">
       
       {/* Fixed Header */}
-      <header className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-2xl border-b border-border-lux py-5 px-10 flex justify-between items-center">
-        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => setActiveTab("HOME")}>
-          <span className="text-lg font-black tracking-[0.2em] text-accent-gold uppercase select-none">Omri<span className="text-accent-gold-soft">&</span>Opal</span>
+      <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-2xl border-b border-border-lux py-6 px-10 flex justify-between items-center transition-all duration-500">
+        <div className="flex items-center gap-3 group cursor-pointer" onClick={() => { setActiveTab("HOME"); setIsMenuOpen(false); }}>
+          <span className="text-2xl font-serif tracking-widest text-accent-gold uppercase select-none drop-shadow-sm">
+            OMRI <span className="text-accent-gold-soft">&</span> OPAL
+          </span>
         </div>
         
         <div className="hidden md:flex gap-10 items-center">
@@ -87,21 +92,51 @@ export default function Home() {
               )}
             </button>
           ))}
-          <div className="ml-4 opacity-80 hover:opacity-100 transition-opacity">
-            <WeddingRings />
-          </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-6">
+           <div className="hidden md:block">
+              <WeddingRings />
+           </div>
+           
+           {/* Mobile Menu Toggle */}
+           <button 
+             className="md:hidden p-2 text-accent-gold hover:bg-accent-gold/5 rounded-full transition-colors"
+             onClick={() => setIsMenuOpen(!isMenuOpen)}
+           >
+             {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+           </button>
+
            {user ? (
-             <div className="w-9 h-9 rounded-full border border-border-lux p-0.5 overflow-hidden">
+             <div className="w-10 h-10 rounded-full border-2 border-accent-gold/20 p-0.5 overflow-hidden shadow-sm">
                 {user.photoURL ? <img src={user.photoURL} alt="User" className="w-full h-full object-cover rounded-full" /> : <User className="w-full h-full text-foreground/20 p-1" />}
              </div>
            ) : (
-             <button className="text-[9px] font-black uppercase tracking-[0.2em] px-5 py-2.5 bg-accent-gold text-white rounded-full hover:shadow-lg transition-all active:scale-95 shadow-[0_5px_15px_-5px_rgba(212,175,55,0.5)]">Join Story</button>
+             <button className="text-[10px] font-black uppercase tracking-[0.3em] px-6 py-3 bg-accent-gold text-white rounded-full hover:shadow-xl transition-all active:scale-95 shadow-[0_10px_20px_-5px_rgba(212,175,55,0.4)]">
+               Join Story
+             </button>
            )}
         </div>
       </header>
+
+      {/* Mobile Menu Overlay */}
+      {isMenuOpen && (
+        <div className="absolute top-full left-0 w-full bg-white/95 backdrop-blur-2xl border-b border-border-lux md:hidden animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex flex-col p-8 gap-6">
+            {["HOME", "DATE GENERATOR", "BUCKET LIST", "TIMELINE"].map((tab) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); setIsMenuOpen(false); }}
+                className={`text-xs font-bold uppercase tracking-[0.3em] text-left transition-all ${
+                  activeTab === tab ? "text-accent-gold" : "text-foreground/40"
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area (Full Width) */}
       <main className="mt-36 w-full flex flex-col items-center px-4 md:px-0">
