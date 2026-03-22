@@ -92,16 +92,19 @@ export type YieldCurvePoint = {
 const n = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-async function fmpSafe(path: string, params: Record<string, string>): Promise<any[]> {
+async function fmpSafe(path: string, params: Record<string, string>, cacheOptions: RequestInit = { cache: "no-store" }): Promise<any> {
   try {
     const qs = new URLSearchParams({ ...params, apikey: FMP_KEY });
     const url = `${FMP_BASE}${path}?${qs}`;
     console.log('FMP URL:', url); // Server-side log
-    const res = await fetch(url, { cache: "no-store" });
+    const res = await fetch(url, cacheOptions);
     console.log('FMP Response Status:', res.status, 'Path:', path); // Server-side log
+    if (res.status === 429) {
+      return { _error: 429 };
+    }
     if (!res.ok) return [];
     const json = await res.json();
-    return Array.isArray(json) ? json : [];
+    return Array.isArray(json) ? json : (json || []);
   } catch (e) {
     console.error(`[FMP] Error fetching ${path}:`, e);
     return [];
@@ -134,8 +137,17 @@ export async function getStockData(
     const cashArr    = await fmpSafe("/cash-flow-statement",     stmtP); await sleep(2000);
     const quoteArr   = await fmpSafe("/quote", { symbol: ticker });
     
-    const fmpQuote = quoteArr[0] || {};
-    if (incomeArr.length === 0 && quoteArr.length === 0) {
+    if (incomeArr?._error === 429 || balanceArr?._error === 429 || cashArr?._error === 429 || quoteArr?._error === 429) {
+      return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
+    }
+
+    const iList = Array.isArray(incomeArr) ? incomeArr : [];
+    const bList = Array.isArray(balanceArr) ? balanceArr : [];
+    const cList = Array.isArray(cashArr) ? cashArr : [];
+    const qList = Array.isArray(quoteArr) ? quoteArr : [];
+
+    const fmpQuote = qList[0] || {};
+    if (iList.length === 0 && qList.length === 0) {
       console.error(`[getStockData] All fetches failed for ${ticker}. Check FMP_KEY.`);
       return { error: 'No data returned from FMP', symbol: ticker } as any;
     }
@@ -150,7 +162,7 @@ export async function getStockData(
       return yearMap.get(label)!;
     };
 
-    for (const row of incomeArr) {
+    for (const row of iList) {
       const lbl = rowLabel(row, period);
       const e = ensure(lbl);
       e.revenue = n(row.revenue);
@@ -159,7 +171,7 @@ export async function getStockData(
       e.netIncome = n(row.netIncome);
       e.researchAndDevelopment = n(row.researchAndDevelopmentExpenses);
     }
-    for (const row of balanceArr) {
+    for (const row of bList) {
       const lbl = rowLabel(row, period);
       const e = ensure(lbl);
       e.totalAssets = n(row.totalAssets);
@@ -169,7 +181,7 @@ export async function getStockData(
       e.debt = n(row.totalDebt) || (n(row.shortTermDebt) + n(row.longTermDebt));
       e.retainedEarnings = n(row.retainedEarnings);
     }
-    for (const row of cashArr) {
+    for (const row of cList) {
       const lbl = rowLabel(row, period);
       const e = ensure(lbl);
       e.operatingCashFlow = n(row.operatingCashFlow) || n(row.netCashProvidedByOperatingActivities);
@@ -185,9 +197,9 @@ export async function getStockData(
     });
 
     // 3. Manual Calculations for Margins and ROE
-    const i0 = incomeArr[0] || {};
-    const b0 = balanceArr[0] || {};
-    const c0 = cashArr[0] || {};
+    const i0 = iList[0] || {};
+    const b0 = bList[0] || {};
+    const c0 = cList[0] || {};
 
     const calcMargin = (num: any, den: any): number | null => {
       const nNum = n(num);
@@ -366,5 +378,26 @@ export async function getYieldCurveData(): Promise<YieldCurvePoint[]> {
   } catch (e) {
     console.error("[YieldCurve] Error:", e);
     return [];
+  }
+}
+
+export async function getMarketOverview(): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
+  try {
+    const data = await fmpSafe("/quote/SPY,QQQ,GLD,BTCUSD", {}, { next: { revalidate: 900 } });
+    if (data && data._error === 429) return { rateLimited: true, data: [] };
+    return { rateLimited: false, data: Array.isArray(data) ? data : [data].filter(Boolean) as any };
+  } catch (e) {
+    return { rateLimited: false, data: [] };
+  }
+}
+
+export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: boolean; data: StockQuote[] }> {
+  if (!symbols || symbols.length === 0) return { rateLimited: false, data: [] };
+  try {
+    const data = await fmpSafe(`/quote/${symbols.join(',')}`, {});
+    if (data && data._error === 429) return { rateLimited: true, data: [] };
+    return { rateLimited: false, data: Array.isArray(data) ? data : [data].filter(Boolean) as any };
+  } catch (e) {
+    return { rateLimited: false, data: [] };
   }
 }

@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { getStockData, type StockData, type Period, type StockQuote } from "./actions";
+import { getStockData, getMarketOverview, getBulkQuotes, type StockData, type Period, type StockQuote } from "./actions";
+import { auth, db } from "@/lib/firebase";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { useCollection } from "react-firebase-hooks/firestore";
+import { collection, query, orderBy } from "firebase/firestore";
+import { AlertCircle, TrendingUp, Activity } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, LineChart, Line, AreaChart, Area, ComposedChart
@@ -32,15 +37,23 @@ function formatValue(
 let globalIsFetching = false;
 
 export default function Home() {
+  const [user] = useAuthState(auth);
+  const watchlistRef = user ? collection(db, "users", user.uid, "watchlist") : null;
+  const [watchlistDocs] = useCollection(watchlistRef ? query(watchlistRef, orderBy("ticker")) : null);
+
+  const [marketOverview, setMarketOverview] = useState<StockQuote[]>([]);
+  const [watchlistQuotes, setWatchlistQuotes] = useState<StockQuote[]>([]);
+
   const [tickerInput, setTickerInput] = useState("");
-  const [currentTicker, setCurrentTicker] = useState("AAPL");
+  const [currentTicker, setCurrentTicker] = useState("");
   const [period, setPeriod] = useState<Period>("annual");
   const [data, setData] = useState<StockData | null>(null);
   const [quoteState, setQuoteState] = useState<StockQuote | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
   const fetchData = async (symbol: string, p: Period) => {
+    if (!symbol) return;
     setLoading(true);
     setError(false);
     setRateLimited(false);
@@ -58,6 +71,10 @@ export default function Home() {
         const safeData = Array.isArray(result) ? result[0] : result;
         setData(safeData);
         setQuoteState(safeData.quote);
+      } else if (result && (result as any).rateLimited) {
+        setRateLimited(true);
+        setData(null);
+        setQuoteState(null);
       } else {
         // Hardcoded Fallback for testing or server-side error
         setData(null);
@@ -80,12 +97,42 @@ export default function Home() {
 
   // Re-fetch only strictly on mount or period toggle
   useEffect(() => { 
+    if (!currentTicker) return;
     if (globalIsFetching) return;
     globalIsFetching = true;
     fetchData(currentTicker, period).finally(() => {
       globalIsFetching = false;
     });
-  }, [period]);
+  }, [period, currentTicker]);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchOverview() {
+      const res = await getMarketOverview();
+      if (!mounted) return;
+      if (res.rateLimited) setRateLimited(true);
+      if (res.data) setMarketOverview(res.data);
+    }
+    fetchOverview();
+    return () => { mounted = false; };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (watchlistDocs && watchlistDocs.docs.length > 0) {
+      const symbols = watchlistDocs.docs.map(d => d.data().ticker);
+      async function fetchWatchlist() {
+        const res = await getBulkQuotes(symbols);
+        if (!mounted) return;
+        if (res.rateLimited) setRateLimited(true);
+        if (res.data) setWatchlistQuotes(res.data);
+      }
+      fetchWatchlist();
+    } else if (watchlistDocs && watchlistDocs.docs.length === 0) {
+      setWatchlistQuotes([]);
+    }
+    return () => { mounted = false; };
+  }, [watchlistDocs]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,8 +159,59 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center p-4 md:p-8 text-foreground transition-colors duration-300">
 
+      {rateLimited && (
+        <div className="w-full max-w-4xl bg-rose-500/10 border border-rose-500/20 backdrop-blur-md rounded-2xl p-4 mt-6 text-center text-rose-500 font-bold tracking-widest uppercase text-xs flex items-center justify-center gap-3 shadow-lg fade-in animate-in">
+           <AlertCircle className="w-5 h-5" />
+           Daily Data Limit Reached. Using cached data.
+        </div>
+      )}
+
+      {/* Market Overview Card */}
+      {marketOverview.length > 0 && (
+        <div className="w-full max-w-4xl mt-12 flex flex-wrap lg:flex-nowrap gap-4 pb-4">
+          {marketOverview.map(q => (
+            <div key={q.symbol} className="min-w-[150px] flex-1 bg-card/40 backdrop-blur-2xl border border-border-lux rounded-2xl p-5 shadow-xl relative overflow-hidden group hover:border-foreground/20 hover:scale-[1.02] transition-all cursor-pointer" onClick={() => { setTickerInput(q.symbol); setCurrentTicker(q.symbol); }}>
+              <div className="absolute top-0 right-0 w-24 h-24 bg-foreground/5 blur-[40px] -mr-8 -mt-8 group-hover:bg-foreground/10 transition-colors" />
+              <div className="flex justify-between items-start relative z-10 mb-2">
+                <span className="text-sm font-bold tracking-widest text-foreground">{q.symbol}</span>
+                <span className={`text-[10px] font-black ${q.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                  {q.changesPercentage > 0 ? "+" : ""}{q.changesPercentage?.toFixed(2)}%
+                </span>
+              </div>
+              <div className="relative z-10 flex items-baseline gap-1">
+                <span className="text-2xl font-light tracking-tight">${q.price?.toFixed(2)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* My Watchlist Card */}
+      {user && watchlistQuotes.length > 0 && (
+        <div className="w-full max-w-4xl mt-4 mb-8 bg-card/30 backdrop-blur-2xl border border-border-lux rounded-[2rem] p-6 shadow-xl relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-accent-gold/5 blur-[80px] -mr-16 -mt-16 group-hover:bg-accent-gold/10 transition-colors pointer-events-none" />
+          <div className="flex items-center gap-3 mb-6 relative z-10">
+            <TrendingUp className="w-5 h-5 text-accent-gold" />
+            <h2 className="text-xs font-black uppercase tracking-[0.3em] text-foreground/50">My Tactical Watchlist</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 relative z-10">
+            {watchlistQuotes.map(q => (
+              <div key={q.symbol} className="bg-background/40 border border-border-lux rounded-xl p-4 flex flex-col hover:bg-card/60 transition-colors cursor-pointer active:scale-95" onClick={() => { setTickerInput(q.symbol); setCurrentTicker(q.symbol); }}>
+                <span className="text-xs font-bold tracking-wider mb-1 text-foreground/80">{q.symbol}</span>
+                <div className="flex justify-between items-end">
+                  <span className="text-lg font-light text-foreground">${q.price?.toFixed(2)}</span>
+                  <span className={`text-[9px] font-bold ${q.changesPercentage >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                    {q.changesPercentage > 0 ? "+" : ""}{q.changesPercentage?.toFixed(2)}%
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Search Bar */}
-      <div className="w-full max-w-4xl mb-12 flex flex-col items-center mt-20 gap-8">
+      <div className="w-full max-w-4xl mb-12 flex flex-col items-center mt-12 gap-8">
         <h1 className="text-5xl font-extralight tracking-tighter text-foreground leading-none text-center">
           Market <span className="text-accent-gold italic opacity-80">Terminal</span>
         </h1>
