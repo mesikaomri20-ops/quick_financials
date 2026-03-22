@@ -572,4 +572,3 @@ function FinancialCharts({ financials, period }: { financials: any[]; period: Pe
     </>
   );
 }
-"
