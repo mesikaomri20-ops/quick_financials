@@ -97,6 +97,13 @@ export type YieldCurvePoint = {
 
 const n = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
 
+const extractRaw = (val: any): number => {
+  if (val === null || val === undefined) return 0;
+  if (typeof val === 'number') return val;
+  if (typeof val === 'object' && val.raw !== undefined) return val.raw;
+  return parseFloat(val) || 0;
+};
+
 
 function rowLabel(row: any, period: Period): string {
   if (!row.date) return "N/A";
@@ -161,26 +168,36 @@ async function fetchStockDataFromAPI(
   period: Period
 ): Promise<any> {
   const yf = yahooFinance;
+  const symbol = ticker;
   try {
-    const symbol = ticker;
-    const modules: any[] = [
-      'price', 
-      'summaryDetail', 
-      'financialData', 
-      'defaultKeyStatistics', 
-      'incomeStatementHistory', 
-      'incomeStatementHistoryQuarterly', 
-      'balanceSheetHistory', 
-      'balanceSheetHistoryQuarterly'
-    ];
-    
-    // Surgical fetch of exactly 8 modules
-    const stats = await yf.quoteSummary(symbol, { modules }).catch(() => ({}));
+    // 1. Parallel fetch: quoteSummary (for top cards) + fundamentalsTimeSeries (for charts)
+    const [stats, annualTS, quarterlyTS] = await Promise.all([
+      yf.quoteSummary(symbol, {
+        modules: [
+          'price', 
+          'summaryDetail', 
+          'financialData', 
+          'defaultKeyStatistics'
+        ]
+      }).catch(() => ({} as any)),
+      yf.fundamentalsTimeSeries(symbol, {
+        module: 'all',
+        type: 'annual',
+        period1: '2020-01-01',
+        period2: '2026-12-31'
+      }).catch(() => []),
+      yf.fundamentalsTimeSeries(symbol, {
+        module: 'all',
+        type: 'quarterly',
+        period1: '2020-01-01',
+        period2: '2026-12-31'
+      }).catch(() => [])
+    ]);
 
-    const priceMod = (stats as any).price || {};
-    const sd = (stats as any).summaryDetail || {};
-    const fd = (stats as any).financialData || {};
-    const ks = (stats as any).defaultKeyStatistics || {};
+    const priceMod = stats.price || {};
+    const sd = stats.summaryDetail || {};
+    const fd = stats.financialData || {};
+    const ks = stats.defaultKeyStatistics || {};
 
     const freshStockData: any = {
       symbol: ticker,
@@ -210,51 +227,51 @@ async function fetchStockDataFromAPI(
       }
     };
 
-    const mapHistory = (incomeArr: any[], balanceArr: any[], isQuarterly: boolean) => {
-      const map = new Map();
-      const process = (arr: any[]) => arr?.forEach(item => {
-          const d = item.endDate || item.date;
-          if (!d) return;
-          const key = new Date(d).toISOString().split('T')[0];
-          map.set(key, { ...map.get(key), ...item });
-      });
-      process(incomeArr);
-      process(balanceArr);
-
-      return Array.from(map.values())
+    const mapHistory = (tsArr: any[], isQuarterly: boolean) => {
+      const prefix = isQuarterly ? "quarterly" : "annual";
+      
+      return tsArr
         .map(item => {
-          const d = item.endDate || item.date;
-          const rev = item.totalRevenue?.raw || 0;
-          const gp = item.grossProfit?.raw || (rev - (item.costOfRevenue?.raw || 0));
+          const d = item.date;
+          // Core requested fields (2026 method)
+          const rev = extractRaw(item[`${prefix}TotalRevenue`]);
+          const netInc = extractRaw(item[`${prefix}NetIncome`]);
+          const assets = extractRaw(item[`${prefix}TotalAssets`]);
           
+          // Supplemental fields for a premium UI experience
+          const gp = extractRaw(item[`${prefix}GrossProfit`]);
+          const opInc = extractRaw(item[`${prefix}OperatingIncome`]);
+          const liab = extractRaw(item[`${prefix}TotalLiabilitiesNetMinorityInterest`]);
+          const equity = extractRaw(item[`${prefix}StockholdersEquity`]);
+          const cash = extractRaw(item[`${prefix}CashAndCashEquivalents`]);
+          const debt = extractRaw(item[`${prefix}LongTermDebt`]);
+          const fcf = extractRaw(item[`${prefix}FreeCashFlow`]);
+          const ocf = extractRaw(item[`${prefix}OperatingCashFlow`]);
+          const re = extractRaw(item[`${prefix}RetainedEarnings`]);
+
           return {
             year: rowLabel({ date: d }, isQuarterly ? "quarter" : "annual"),
             revenue: rev,
             grossProfit: gp,
-            operatingIncome: item.operatingIncome?.raw || 0,
-            netIncome: item.netIncome?.raw || item.netIncomeCommonStockholders?.raw || 0,
-            researchAndDevelopment: item.researchAndDevelopment?.raw || 0,
-            totalAssets: item.totalAssets?.raw || 0,
-            totalLiabilities: item.totalLiabilities?.raw || (item.totalAssets?.raw - (item.totalStockholderEquity?.raw || 0)) || 0,
-            totalEquity: item.totalStockholderEquity?.raw || 0,
-            cash: item.cash?.raw || item.cashAndCashEquivalents?.raw || 0,
-            debt: item.longTermDebt?.raw || item.totalDebt?.raw || 0,
-            freeCashFlow: 0, 
-            operatingCashFlow: 0, 
-            retainedEarnings: item.retainedEarnings?.raw || 0,
+            operatingIncome: opInc, 
+            netIncome: netInc,
+            researchAndDevelopment: 0,
+            totalAssets: assets,
+            totalLiabilities: liab || (assets - equity),
+            totalEquity: equity,
+            cash: cash,
+            debt: debt,
+            freeCashFlow: fcf, 
+            operatingCashFlow: ocf, 
+            retainedEarnings: re,
             rawDate: new Date(d)
           };
         })
         .sort((a, b) => a.rawDate.getTime() - b.rawDate.getTime());
     };
 
-    const ish = (stats as any).incomeStatementHistory?.incomeStatementHistory || [];
-    const ishQ = (stats as any).incomeStatementHistoryQuarterly?.incomeStatementHistory || [];
-    const bsh = (stats as any).balanceSheetHistory?.balanceSheetStatements || [];
-    const bshQ = (stats as any).balanceSheetHistoryQuarterly?.balanceSheetStatements || [];
-
-    freshStockData.fundamentals.annualFinancials = mapHistory(ish, bsh, false);
-    freshStockData.fundamentals.quarterlyFinancials = mapHistory(ishQ, bshQ, true);
+    freshStockData.fundamentals.annualFinancials = mapHistory(annualTS, false);
+    freshStockData.fundamentals.quarterlyFinancials = mapHistory(quarterlyTS, true);
     
     freshStockData.fundamentals.financials = period === "annual" 
       ? freshStockData.fundamentals.annualFinancials 
