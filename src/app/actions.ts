@@ -92,13 +92,6 @@ export type YieldCurvePoint = {
 const n = (val: any): number => { if (val === null || val === undefined || val === "" || val === "N/A") return 0; const num = Number(val); return isNaN(num) ? 0 : num; };
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
-const getFallback = (symbol: string): StockQuote => ({
-  symbol,
-  price: 150.25 + (Math.random() * 10),
-  changesPercentage: 1.25,
-  companyName: `${symbol} (Stale Data)`,
-});
-
 async function fmpSafe(path: string, params: Record<string, string>, cacheOptions: RequestInit = { cache: "no-store" }): Promise<any> {
   const keySnippet = process.env.FMP_API_KEY ? process.env.FMP_API_KEY.slice(0, 5) + '...' : 'NONE';
   console.log('Using Key:', keySnippet);
@@ -162,18 +155,6 @@ export async function getStockData(
       const errObj = [incomeArr, balanceArr, cashArr, quoteArr, profileArr].find(checkErr);
       if (errObj._error === 429) {
         return { error: 'Daily Data Limit Reached', rateLimited: true, symbol: ticker } as any;
-      }
-      if (errObj._error === 403) {
-        return {
-          quote: getFallback(ticker),
-          fundamentals: {
-            trailingPE: 15.2, forwardPE: 14.1, priceToCashFlow: 12.5, pegRatio: 1.2,
-            grossMargin: 45.5, operatingMargin: 25.2, profitMargin: 20.1, fcfMargin: 15.5,
-            roe: 18.5, dividendYield: 1.5, beta: 1.1, marketCap: 2500000000000,
-            totalDebt: 50000000000, totalCash: 75000000000,
-            financials: [{ year: "2023", revenue: 380000000000, grossProfit: 170000000000, operatingIncome: 110000000000, netIncome: 95000000000, totalAssets: 350000000000, totalLiabilities: 290000000000, totalEquity: 60000000000, cash: 75000000000, debt: 50000000000, freeCashFlow: 100000000000, operatingCashFlow: 115000000000, retainedEarnings: 50000000000, researchAndDevelopment: 25000000000 }]
-          }
-        } as any;
       }
       return { error: errObj.message || 'API Error', symbol: ticker } as any;
     }
@@ -432,16 +413,16 @@ export async function getMarketOverview(): Promise<{ rateLimited: boolean; data:
     const results = await Promise.all(symbols.map(sym => fmpSafe(`/quote-short/${sym}`, {}, { next: { revalidate: 900 } })));
     const data = results.flat();
     
-    if (data.some(d => d && d._error === 429)) return { rateLimited: true, data: symbols.map(getFallback) };
-    if (data.some(d => d && d._error === 403)) return { rateLimited: false, data: symbols.map(getFallback) };
-    if (data.some(d => d && d._error)) return { rateLimited: false, data: symbols.map(getFallback) };
+    if (data.some(d => d && d._error === 429)) return { rateLimited: true, data: [] };
+    if (data.some(d => d && d._error === 403)) return { rateLimited: false, data: [] };
+    if (data.some(d => d && d._error)) return { rateLimited: false, data: [] };
 
     return { 
       rateLimited: false, 
       data: data.filter(Boolean).map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) as any 
     };
   } catch (e) {
-    return { rateLimited: false, data: ["SPY", "QQQ", "GLD", "BTCUSD"].map(getFallback) };
+    return { rateLimited: false, data: [] };
   }
 }
 
@@ -451,15 +432,15 @@ export async function getBulkQuotes(symbols: string[]): Promise<{ rateLimited: b
     const results = await Promise.all(symbols.map(sym => fmpSafe(`/quote-short/${sym}`, {})));
     const data = results.flat();
 
-    if (data.some(d => d && d._error === 429)) return { rateLimited: true, data: symbols.map(getFallback) };
-    if (data.some(d => d && d._error === 403)) return { rateLimited: false, data: symbols.map(getFallback) };
-    if (data.some(d => d && d._error)) return { rateLimited: false, data: symbols.map(getFallback) };
+    if (data.some(d => d && d._error === 429)) return { rateLimited: true, data: [] };
+    if (data.some(d => d && d._error === 403)) return { rateLimited: false, data: [] };
+    if (data.some(d => d && d._error)) return { rateLimited: false, data: [] };
 
     return { 
       rateLimited: false, 
       data: data.filter(Boolean).map(d => ({ ...d, changesPercentage: d.changesPercentage || d.changes })) as any 
     };
   } catch (e) {
-    return { rateLimited: false, data: symbols.map(getFallback) };
+    return { rateLimited: false, data: [] };
   }
 }

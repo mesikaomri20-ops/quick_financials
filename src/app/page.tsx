@@ -61,11 +61,6 @@ export default function Home() {
     try {
       const result = await getStockData(symbol);
       
-      // Console Alert for immediate feedback
-      if (typeof window !== 'undefined') {
-        window.alert('Data arrived: ' + JSON.stringify(result));
-      }
-
       if (result && !('error' in result)) {
         // Array Check (extra safety for FMP-style responses)
         const safeData = Array.isArray(result) ? result[0] : result;
@@ -76,16 +71,10 @@ export default function Home() {
         setData(null);
         setQuoteState(null);
       } else {
-        // Hardcoded Fallback for testing or server-side error
-        const errorMsg = result && 'error' in (result as any) ? (result as any).error : 'Test Mode';
+        // UI Error Fallback
+        setError(true);
         setData(null);
-        setQuoteState({ 
-          name: `Error: ${errorMsg}`,
-          companyName: `Error: ${errorMsg}`, 
-          price: 999, 
-          symbol: 'ERR', 
-          changesPercentage: 0
-        } as any);
+        setQuoteState(null);
       }
     } catch (e) {
       console.error("Fetch failed:", e);
@@ -164,6 +153,13 @@ export default function Home() {
         <div className="w-full max-w-4xl bg-rose-500/10 border border-rose-500/20 backdrop-blur-md rounded-2xl p-4 mt-6 text-center text-rose-500 font-bold tracking-widest uppercase text-xs flex items-center justify-center gap-3 shadow-lg fade-in animate-in">
            <AlertCircle className="w-5 h-5" />
            Daily Data Limit Reached. Using cached data.
+        </div>
+      )}
+
+      {error && !rateLimited && (
+        <div className="w-full max-w-4xl bg-rose-500/10 border border-rose-500/20 backdrop-blur-md rounded-2xl p-4 mt-6 text-center text-rose-500 font-bold tracking-widest uppercase text-xs flex items-center justify-center gap-3 shadow-lg fade-in animate-in">
+           <AlertCircle className="w-5 h-5" />
+           Live data unavailable
         </div>
       )}
 
