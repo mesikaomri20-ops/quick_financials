@@ -2,7 +2,8 @@
 
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import yahooFinance from 'yahoo-finance2';
+import YahooFinance from 'yahoo-finance2';
+const yahooFinance = new YahooFinance();
 const FRED_KEY  = "65ab3f80fea063304fc09ecc928ba1a8";
 const FRED_BASE = "https://api.stlouisfed.org/fred";
 
